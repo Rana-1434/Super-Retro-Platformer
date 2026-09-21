@@ -1,0 +1,6 @@
+{
+  "name": "Super Retro Platformer",
+  "description": "A classic side-scrolling 2D platformer game inspired by Super Mario Bros featuring 3 stages (Overworld, Underground, Bowser's Castle), high jump & double-jump mechanics, Koopa shells, boss battle, and authentic chiptune audio.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

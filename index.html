@@ -1,0 +1,3795 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Super Retro Platformer - 2D Side-Scroller</title>
+    <meta name="description" content="A classic side-scrolling 2D platformer game inspired by Super Mario Bros featuring smooth physics, powerups, enemies, and authentic retro visuals." />
+    <meta property="og:title" content="Super Retro Platformer - 2D Side-Scroller" />
+    <meta property="og:description" content="A classic side-scrolling 2D platformer game inspired by Super Mario Bros featuring smooth physics, powerups, enemies, and authentic retro visuals." />
+    <meta property="og:type" content="website" />
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+      }
+
+      body {
+        background: #0f111a;
+        color: #fff;
+        font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        overflow: hidden;
+        touch-action: none;
+      }
+
+      #game-wrapper {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        max-width: 1000px;
+        max-height: 600px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 16px 50px rgba(0, 0, 0, 0.9);
+        background: #000;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 2px solid #222639;
+      }
+
+      #game-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        image-rendering: -moz-crisp-edges;
+        image-rendering: -webkit-crisp-edges;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+        background: #5c94fc;
+      }
+
+      /* Mobile / Touch Controller */
+      #touch-controls {
+        position: absolute;
+        bottom: 12px;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: space-between;
+        padding: 0 18px;
+        pointer-events: none;
+        z-index: 50;
+      }
+
+      .touch-group {
+        display: flex;
+        gap: 12px;
+        pointer-events: auto;
+      }
+
+      .touch-btn {
+        width: 58px;
+        height: 58px;
+        background: rgba(20, 24, 38, 0.72);
+        border: 2px solid rgba(255, 255, 255, 0.4);
+        border-radius: 50%;
+        color: #fff;
+        font-family: monospace;
+        font-size: 20px;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        active: scale(0.92);
+        touch-action: manipulation;
+      }
+
+      .touch-btn:active, .touch-btn.active {
+        background: rgba(252, 152, 56, 0.85);
+        border-color: #fff;
+        transform: scale(0.93);
+      }
+
+      .touch-btn-action {
+        background: rgba(220, 40, 40, 0.75);
+      }
+
+      .touch-btn-jump {
+        background: rgba(40, 180, 40, 0.75);
+      }
+
+      /* Quick top toolbar for mute and restart */
+      #top-bar {
+        position: absolute;
+        top: 8px;
+        right: 12px;
+        display: flex;
+        gap: 8px;
+        z-index: 60;
+      }
+
+      .icon-btn {
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: #fff;
+        padding: 6px 10px;
+        font-size: 13px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-family: inherit;
+        transition: background 0.15s;
+      }
+
+      .icon-btn:hover {
+        background: rgba(252, 152, 56, 0.85);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-wrapper">
+      <canvas id="game-canvas" width="800" height="480"></canvas>
+
+      <div id="top-bar">
+        <select id="stage-select" class="icon-btn" title="Select Stage" style="background: rgba(0, 0, 0, 0.75); cursor: pointer; color: #ffd700; font-weight: bold;">
+          <option value="1">STAGE 1: OVERWORLD</option>
+          <option value="2">STAGE 2: UNDERGROUND</option>
+          <option value="3">STAGE 3: CASTLE</option>
+        </select>
+        <button id="btn-sound" class="icon-btn" title="Toggle Sound">🔊 SOUND: ON</button>
+        <button id="btn-restart" class="icon-btn" title="Reset Level">🔄 RESTART</button>
+      </div>
+
+      <div id="touch-controls">
+        <div class="touch-group">
+          <button id="btn-left" class="touch-btn" aria-label="Left">◀</button>
+          <button id="btn-right" class="touch-btn" aria-label="Right">▶</button>
+        </div>
+        <div class="touch-group">
+          <button id="btn-run" class="touch-btn touch-btn-action" aria-label="Run">B</button>
+          <button id="btn-jump" class="touch-btn touch-btn-jump" aria-label="Jump">A</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function() {
+        'use strict';
+
+        // --- RETRO SOUND SYNTHESIZER (Web Audio API) ---
+        let audioCtx = null;
+        let soundEnabled = true;
+
+        function initAudio() {
+          if (!audioCtx) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (AudioContext) {
+              audioCtx = new AudioContext();
+            }
+          }
+          if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume();
+          }
+        }
+
+        function playTone(freq, type, duration, rampTo = null, delay = 0) {
+          if (!soundEnabled || !audioCtx) return;
+          try {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            const now = audioCtx.currentTime + delay;
+
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, now);
+            if (rampTo !== null) {
+              osc.frequency.exponentialRampToValueAtTime(Math.max(10, rampTo), now + duration);
+            }
+
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            osc.start(now);
+            osc.stop(now + duration);
+          } catch(e) {}
+        }
+
+        const Sound = {
+          jump: function() {
+            playTone(150, 'square', 0.16, 580);
+          },
+          doubleJump: function() {
+            playTone(320, 'square', 0.12, 750, 0);
+            playTone(560, 'square', 0.18, 980, 0.05);
+          },
+          stomp: function() {
+            playTone(280, 'triangle', 0.14, 60);
+          },
+          coin: function() {
+            playTone(987.77, 'sine', 0.08, null, 0); // B5
+            playTone(1318.51, 'sine', 0.28, null, 0.08); // E6
+          },
+          bump: function() {
+            playTone(120, 'square', 0.1, 50);
+          },
+          powerupAppear: function() {
+            const notes = [330, 392, 493, 587, 659];
+            notes.forEach((f, i) => playTone(f, 'triangle', 0.08, null, i * 0.06));
+          },
+          powerup: function() {
+            const notes = [330, 392, 659, 523, 587, 784];
+            notes.forEach((f, i) => playTone(f, 'square', 0.09, null, i * 0.07));
+          },
+          breakBrick: function() {
+            playTone(240, 'sawtooth', 0.15, 40);
+          },
+          shrink: function() {
+            const notes = [784, 587, 523, 392, 330];
+            notes.forEach((f, i) => playTone(f, 'triangle', 0.09, null, i * 0.07));
+          },
+          die: function() {
+            const melody = [500, 450, 400, 350, 250, 180];
+            melody.forEach((f, i) => playTone(f, 'sawtooth', 0.18, null, i * 0.13));
+          },
+          victory: function() {
+            const fanfare = [
+              { f: 392, d: 0.15, t: 0 },
+              { f: 523, d: 0.15, t: 0.16 },
+              { f: 659, d: 0.15, t: 0.32 },
+              { f: 784, d: 0.22, t: 0.48 },
+              { f: 659, d: 0.15, t: 0.72 },
+              { f: 784, d: 0.45, t: 0.90 }
+            ];
+            fanfare.forEach(n => playTone(n.f, 'square', n.d, null, n.t));
+          },
+          stageClear: function() {
+            const fanfare = [
+              { f: 523.25, d: 0.12, t: 0 },
+              { f: 659.25, d: 0.12, t: 0.12 },
+              { f: 783.99, d: 0.12, t: 0.24 },
+              { f: 1046.5, d: 0.25, t: 0.36 },
+              { f: 880.00, d: 0.15, t: 0.62 },
+              { f: 1046.5, d: 0.40, t: 0.80 }
+            ];
+            fanfare.forEach(n => playTone(n.f, 'square', n.d, null, n.t));
+          },
+          lava: function() {
+            playTone(80, 'sawtooth', 0.25, 30);
+          },
+          bossRoar: function() {
+            playTone(110, 'sawtooth', 0.35, 45);
+          }
+        };
+
+        // --- RETRO CHIPTUNE BACKGROUND MUSIC ENGINE ---
+        let bgmNoteIndex = 0;
+        let bgmTimer = 0;
+
+        // Stage 1 (Overworld bouncy melody)
+        const bgmOverworld = [
+          { f: 659.25, d: 0.11 }, { f: 659.25, d: 0.11 }, { f: 0, d: 0.11 }, { f: 659.25, d: 0.11 },
+          { f: 0, d: 0.11 }, { f: 523.25, d: 0.11 }, { f: 659.25, d: 0.16 }, { f: 0, d: 0.11 },
+          { f: 783.99, d: 0.18 }, { f: 0, d: 0.22 }, { f: 392.00, d: 0.18 }, { f: 0, d: 0.22 },
+          { f: 523.25, d: 0.15 }, { f: 0, d: 0.11 }, { f: 392.00, d: 0.15 }, { f: 0, d: 0.11 },
+          { f: 329.63, d: 0.15 }, { f: 0, d: 0.11 }, { f: 440.00, d: 0.15 }, { f: 493.88, d: 0.15 },
+          { f: 466.16, d: 0.11 }, { f: 440.00, d: 0.15 }, { f: 392.00, d: 0.18 }
+        ];
+
+        // Stage 2 (Underground classic bass groove)
+        const bgmUnderground = [
+          { f: 130.81, d: 0.12 }, { f: 261.63, d: 0.12 }, { f: 220.00, d: 0.12 }, { f: 440.00, d: 0.12 },
+          { f: 233.08, d: 0.12 }, { f: 466.16, d: 0.12 }, { f: 0, d: 0.16 },
+          { f: 130.81, d: 0.12 }, { f: 261.63, d: 0.12 }, { f: 220.00, d: 0.12 }, { f: 440.00, d: 0.12 },
+          { f: 233.08, d: 0.12 }, { f: 466.16, d: 0.12 }, { f: 0, d: 0.20 }
+        ];
+
+        // Stage 3 (Castle dramatic tense arpeggios)
+        const bgmCastle = [
+          { f: 220.00, d: 0.11 }, { f: 261.63, d: 0.11 }, { f: 329.63, d: 0.11 }, { f: 440.00, d: 0.11 },
+          { f: 415.30, d: 0.11 }, { f: 329.63, d: 0.11 }, { f: 261.63, d: 0.11 }, { f: 220.00, d: 0.11 },
+          { f: 196.00, d: 0.11 }, { f: 246.94, d: 0.11 }, { f: 293.66, d: 0.11 }, { f: 392.00, d: 0.11 },
+          { f: 369.99, d: 0.11 }, { f: 293.66, d: 0.11 }, { f: 246.94, d: 0.11 }, { f: 196.00, d: 0.11 }
+        ];
+
+        function updateBGM(dt) {
+          if (!soundEnabled || !audioCtx || currentState !== GameState.PLAYING) return;
+          const currentTrack = currentStage === 2 ? bgmUnderground : (currentStage === 3 ? bgmCastle : bgmOverworld);
+          bgmTimer -= dt;
+          if (bgmTimer <= 0) {
+            const note = currentTrack[bgmNoteIndex];
+            if (note.f > 0) {
+              playTone(note.f, currentStage === 2 ? 'triangle' : 'square', note.d);
+            }
+            bgmTimer = note.d + 0.04;
+            bgmNoteIndex = (bgmNoteIndex + 1) % currentTrack.length;
+          }
+        }
+
+        // --- CANVAS SETUP ---
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const VIEW_WIDTH = 800;
+        const VIEW_HEIGHT = 480;
+        const TILE_SIZE = 32;
+        const GRAVITY = 1200;
+
+        // --- GAME STATE ---
+        const GameState = {
+          START: 'START',
+          STAGE_CARD: 'STAGE_CARD',
+          PLAYING: 'PLAYING',
+          PAUSED: 'PAUSED',
+          DYING: 'DYING',
+          GAMEOVER: 'GAMEOVER',
+          VICTORY_SLIDE: 'VICTORY_SLIDE',
+          VICTORY_WALK: 'VICTORY_WALK',
+          VICTORY: 'VICTORY'
+        };
+
+        let currentStage = 1;
+        const TOTAL_STAGES = 3;
+        let stageCardTimer = 0;
+        const STAGE_NAMES = {
+          1: { num: '1-1', title: 'OVERWORLD GRASSLAND' },
+          2: { num: '1-2', title: 'UNDERGROUND CAVERN' },
+          3: { num: '1-3', title: "BOWSER'S LAVA CASTLE" }
+        };
+
+        let currentState = GameState.START;
+        let score = 0;
+        let coins = 0;
+        let lives = 3;
+        let levelTime = 400;
+        let timeTimer = 0;
+        let highScore = parseInt(localStorage.getItem('retro_mario_highscore') || '0', 10);
+        let cameraX = 0;
+        let victoryTimer = 0;
+        let victoryBonusCalculated = false;
+
+        // --- CONTROLS INPUT ---
+        const keys = {
+          left: false,
+          right: false,
+          jump: false,
+          jumpHeld: false,
+          run: false
+        };
+
+        window.addEventListener('keydown', (e) => {
+          initAudio();
+          if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+            e.preventDefault();
+          }
+
+          if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
+          if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
+          if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space' || e.code === 'KeyZ') {
+            if (!keys.jumpHeld) {
+              keys.jump = true;
+            }
+            keys.jumpHeld = true;
+          }
+          if (e.shiftKey || e.code === 'KeyX' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+            keys.run = true;
+          }
+
+          if (e.code === 'KeyP' || e.code === 'Escape') {
+            if (currentState === GameState.PLAYING) currentState = GameState.PAUSED;
+            else if (currentState === GameState.PAUSED) currentState = GameState.PLAYING;
+          }
+
+          if (e.code === 'KeyR') {
+            resetGame(true);
+          }
+
+          // Screen transition trigger with Space/Enter
+          if (e.code === 'Space' || e.code === 'Enter') {
+            if (currentState === GameState.START) {
+              startGame();
+            } else if (currentState === GameState.GAMEOVER) {
+              resetGame(true);
+              startGame();
+            } else if (currentState === GameState.VICTORY) {
+              resetGame(true);
+              startGame();
+            }
+          }
+        });
+
+        window.addEventListener('keyup', (e) => {
+          if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+          if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+          if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space' || e.code === 'KeyZ') {
+            keys.jump = false;
+            keys.jumpHeld = false;
+          }
+          if (!e.shiftKey && (e.code === 'KeyX' || e.code === 'ShiftLeft' || e.code === 'ShiftRight')) {
+            keys.run = false;
+          }
+        });
+
+        // Touch Control Listeners
+        function setupTouchBtn(id, keyProp) {
+          const btn = document.getElementById(id);
+          if (!btn) return;
+          const setKey = (val) => {
+            initAudio();
+            if (keyProp === 'jump') {
+              if (val && !keys.jumpHeld) keys.jump = true;
+              keys.jumpHeld = val;
+            } else {
+              keys[keyProp] = val;
+            }
+            if (val) btn.classList.add('active');
+            else btn.classList.remove('active');
+          };
+
+          btn.addEventListener('touchstart', (e) => { e.preventDefault(); setKey(true); });
+          btn.addEventListener('touchend', (e) => { e.preventDefault(); setKey(false); });
+          btn.addEventListener('mousedown', (e) => { e.preventDefault(); setKey(true); });
+          btn.addEventListener('mouseup', (e) => { e.preventDefault(); setKey(false); });
+          btn.addEventListener('mouseleave', () => setKey(false));
+        }
+
+        setupTouchBtn('btn-left', 'left');
+        setupTouchBtn('btn-right', 'right');
+        setupTouchBtn('btn-jump', 'jump');
+        setupTouchBtn('btn-run', 'run');
+
+        // Top buttons
+        const soundBtn = document.getElementById('btn-sound');
+        soundBtn.addEventListener('click', () => {
+          initAudio();
+          soundEnabled = !soundEnabled;
+          soundBtn.textContent = soundEnabled ? '🔊 SOUND: ON' : '🔇 SOUND: OFF';
+        });
+
+        const restartBtn = document.getElementById('btn-restart');
+        restartBtn.addEventListener('click', () => {
+          initAudio();
+          resetGame(true);
+        });
+
+        const stageSelectElem = document.getElementById('stage-select');
+        if (stageSelectElem) {
+          stageSelectElem.addEventListener('change', (e) => {
+            initAudio();
+            const chosen = parseInt(e.target.value, 10);
+            startStage(chosen);
+          });
+        }
+
+        // Click canvas to start / restart
+        canvas.addEventListener('pointerdown', () => {
+          initAudio();
+          if (currentState === GameState.START) {
+            startGame();
+          } else if (currentState === GameState.GAMEOVER || currentState === GameState.VICTORY) {
+            resetGame(true);
+            startGame();
+          }
+        });
+
+        // --- GAME ENTITIES & STRUCTURES ---
+        let player;
+        let blocks = [];
+        let enemies = [];
+        let items = [];
+        let coinsList = [];
+        let particles = [];
+        let floatingTexts = [];
+        let bossFireballs = [];
+        let skyBirds = [];
+        let skyPlanes = [];
+        let bowser = null;
+        let axeBlock = null;
+        let flagpole = null;
+        let castle = null;
+
+        const LEVEL_WIDTH = 3400;
+        const GROUND_Y = 416; // Top of ground blocks
+
+        class Player {
+          constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.w = 24;
+            this.h = 30; // Small form height
+            this.vx = 0;
+            this.vy = 0;
+            this.isGrounded = false;
+            this.facing = 1; // 1 = right, -1 = left
+            this.isSuper = false;
+            this.invincibleTimer = 0;
+            this.animTimer = 0;
+            this.walkFrame = 0;
+            this.skidding = false;
+            this.dyingTimer = 0;
+            this.growthTimer = 0;
+            this.jumpCount = 0;
+            this.maxJumps = 2;
+            this.spinAngle = 0;
+            this.isSpinning = false;
+          }
+
+          reset(x, y) {
+            this.x = x;
+            this.y = y;
+            this.vx = 0;
+            this.vy = 0;
+            this.isGrounded = false;
+            this.facing = 1;
+            this.isSuper = false;
+            this.w = 24;
+            this.h = 30;
+            this.invincibleTimer = 2; // brief spawn shield
+            this.animTimer = 0;
+            this.walkFrame = 0;
+            this.skidding = false;
+            this.dyingTimer = 0;
+            this.growthTimer = 0;
+            this.jumpCount = 0;
+            this.maxJumps = 2;
+            this.spinAngle = 0;
+            this.isSpinning = false;
+          }
+
+          makeSuper() {
+            if (!this.isSuper) {
+              this.isSuper = true;
+              this.y -= 22;
+              this.h = 52;
+              this.growthTimer = 0.5;
+              this.invincibleTimer = 1.0;
+              Sound.powerup();
+              addFloatingText(this.x + 8, this.y, '1000', '#ffff55');
+              score += 1000;
+            }
+          }
+
+          takeDamage() {
+            if (this.invincibleTimer > 0) return;
+            if (this.isSuper) {
+              this.isSuper = false;
+              this.h = 30;
+              this.y += 22;
+              this.invincibleTimer = 2.5; // Flash invulnerability
+              Sound.shrink();
+              this.vy = -200; // Small hop
+            } else {
+              this.die();
+            }
+          }
+
+          die() {
+            currentState = GameState.DYING;
+            this.dyingTimer = 2.4;
+            this.vy = -460;
+            this.vx = 0;
+            Sound.die();
+            lives--;
+          }
+
+          update(dt) {
+            if (this.invincibleTimer > 0) {
+              this.invincibleTimer -= dt;
+            }
+            if (this.growthTimer > 0) {
+              this.growthTimer -= dt;
+            }
+
+            // Horizontal Movement & Acceleration
+            const accel = keys.run ? 1100 : 750;
+            const maxSpeed = keys.run ? 280 : 190;
+            const friction = this.isGrounded ? 900 : 350;
+
+            if (keys.left) {
+              if (this.vx > 30) this.skidding = true;
+              else this.skidding = false;
+              this.vx -= accel * dt;
+              this.facing = -1;
+            } else if (keys.right) {
+              if (this.vx < -30) this.skidding = true;
+              else this.skidding = false;
+              this.vx += accel * dt;
+              this.facing = 1;
+            } else {
+              this.skidding = false;
+              if (this.vx > 0) {
+                this.vx = Math.max(0, this.vx - friction * dt);
+              } else if (this.vx < 0) {
+                this.vx = Math.min(0, this.vx + friction * dt);
+              }
+            }
+
+            this.vx = Math.max(-maxSpeed, Math.min(maxSpeed, this.vx));
+
+            // Spin animation for double jump
+            if (this.isSpinning) {
+              this.spinAngle += dt * 18;
+              if (this.spinAngle >= Math.PI * 2) {
+                this.spinAngle = 0;
+                this.isSpinning = false;
+              }
+            }
+
+            // Jump handling (Ground Jump & Double Jump on double tap)
+            if (keys.jump) {
+              if (this.isGrounded) {
+                // High Jump: gives an extra launch boost if running/sprinting!
+                const isSprinting = keys.run && Math.abs(this.vx) > 100;
+                this.vy = isSprinting ? -620 : -570;
+                this.isGrounded = false;
+                this.jumpCount = 1;
+                Sound.jump();
+                keys.jump = false; // consume trigger
+                // Spawn landing/jump dust
+                createDust(this.x + this.w / 2, this.y + this.h);
+              } else if (this.jumpCount < this.maxJumps) {
+                // High Double Jump in mid-air!
+                this.vy = -590;
+                this.jumpCount = 2;
+                this.isSpinning = true;
+                this.spinAngle = 0;
+                Sound.doubleJump();
+                keys.jump = false; // consume trigger
+                createDoubleJumpEffect(this.x + this.w / 2, this.y + this.h);
+                addFloatingText(this.x + this.w / 2 - 20, this.y - 12, 'HIGH DOUBLE JUMP!', '#55ffff');
+              }
+            }
+
+            // Variable jump height: holding jump button lets you reach maximum high jump altitude
+            if (!keys.jumpHeld && this.vy < -200) {
+              this.vy *= 0.58;
+            }
+
+            // Gravity
+            this.vy += GRAVITY * dt;
+            if (this.vy > 650) this.vy = 650;
+
+            // Move X and resolve collisions
+            this.x += this.vx * dt;
+            // Prevent going behind camera left
+            if (this.x < cameraX) {
+              this.x = cameraX;
+              this.vx = 0;
+            }
+            this.resolveCollisionsX();
+
+            // Move Y and resolve collisions
+            this.y += this.vy * dt;
+            this.isGrounded = false;
+            this.resolveCollisionsY();
+
+            // Hazard and trigger checks (Lava & Axe)
+            for (const b of blocks) {
+              if (b.type === BlockType.LAVA && checkAABB(this, b)) {
+                this.die();
+                createBrickDebris(this.x + this.w / 2, this.y + this.h);
+                return;
+              }
+              if (b.type === BlockType.AXE && checkAABB(this, b)) {
+                triggerAxeSwitch();
+              }
+            }
+
+            // Check pit fall death
+            if (this.y > VIEW_HEIGHT + 60) {
+              this.die();
+            }
+
+            // Walking animation cycle
+            if (Math.abs(this.vx) > 10 && this.isGrounded) {
+              this.animTimer += dt * (Math.abs(this.vx) / 20);
+              this.walkFrame = Math.floor(this.animTimer) % 3;
+            } else {
+              this.walkFrame = 0;
+            }
+          }
+
+          resolveCollisionsX() {
+            for (const b of blocks) {
+              if (!b.solid) continue;
+              if (checkAABB(this, b)) {
+                if (this.vx > 0) {
+                  this.x = b.x - this.w;
+                  this.vx = 0;
+                } else if (this.vx < 0) {
+                  this.x = b.x + b.w;
+                  this.vx = 0;
+                }
+              }
+            }
+          }
+
+          resolveCollisionsY() {
+            for (const b of blocks) {
+              if (!b.solid) continue;
+              if (checkAABB(this, b)) {
+                if (this.vy > 0) {
+                  // Falling onto block
+                  this.y = b.y - this.h;
+                  this.vy = 0;
+                  this.isGrounded = true;
+                  this.jumpCount = 0;
+                  this.isSpinning = false;
+                  this.spinAngle = 0;
+                } else if (this.vy < 0) {
+                  // Bumping head on bottom of block
+                  this.y = b.y + b.h;
+                  this.vy = 0;
+                  b.hit(this);
+                }
+              }
+            }
+          }
+        }
+
+        // --- BLOCK CLASSES ---
+        const BlockType = {
+          GROUND: 'GROUND',
+          BRICK: 'BRICK',
+          QUESTION: 'QUESTION',
+          HIT: 'HIT',
+          PIPE: 'PIPE',
+          STONE: 'STONE',
+          LAVA: 'LAVA',
+          BRIDGE: 'BRIDGE',
+          AXE: 'AXE'
+        };
+
+        class Block {
+          constructor(x, y, w, h, type, content = 'coin') {
+            this.x = x;
+            this.y = y;
+            this.w = w;
+            this.h = h;
+            this.type = type;
+            this.content = content; // 'coin', 'mushroom', 'none'
+            this.solid = !(type === BlockType.LAVA || type === BlockType.AXE);
+            this.bumpOffset = 0;
+            this.bumpSpeed = 0;
+            this.isBumping = false;
+          }
+
+          hit(playerRef) {
+            if (this.type === BlockType.QUESTION) {
+              this.triggerBump();
+              Sound.bump();
+              this.type = BlockType.HIT;
+
+              if (this.content === 'mushroom') {
+                Sound.powerupAppear();
+                items.push(new SuperMushroom(this.x + 4, this.y - 28));
+              } else {
+                // Coin
+                Sound.coin();
+                score += 100;
+                coins++;
+                particles.push(new BounceCoin(this.x + 8, this.y - 20));
+                addFloatingText(this.x + 6, this.y - 24, '100', '#ffff44');
+              }
+            } else if (this.type === BlockType.BRICK) {
+              if (playerRef.isSuper) {
+                // Super Mario smashes bricks!
+                Sound.breakBrick();
+                score += 50;
+                this.solid = false;
+                createBrickDebris(this.x, this.y);
+                const idx = blocks.indexOf(this);
+                if (idx !== -1) blocks.splice(idx, 1);
+              } else {
+                // Small Mario bumps bricks
+                Sound.bump();
+                this.triggerBump();
+              }
+            }
+          }
+
+          triggerBump() {
+            this.isBumping = true;
+            this.bumpOffset = -8;
+            this.bumpSpeed = 40;
+          }
+
+          update(dt) {
+            if (this.isBumping) {
+              this.bumpOffset += this.bumpSpeed * dt;
+              if (this.bumpOffset >= 0) {
+                this.bumpOffset = 0;
+                this.isBumping = false;
+              }
+            }
+          }
+        }
+
+        // --- ENEMY CLASS (GOOMBA) ---
+        class Goomba {
+          constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.w = 28;
+            this.h = 28;
+            this.vx = -55;
+            this.vy = 0;
+            this.isGrounded = false;
+            this.alive = true;
+            this.squashedTimer = 0;
+            this.animTimer = 0;
+            this.active = false;
+          }
+
+          update(dt) {
+            // Activate when close to camera
+            if (!this.active) {
+              if (this.x < cameraX + VIEW_WIDTH + 60) {
+                this.active = true;
+              }
+              return;
+            }
+
+            if (!this.alive) {
+              this.squashedTimer -= dt;
+              return;
+            }
+
+            this.animTimer += dt * 6;
+            this.vy += GRAVITY * dt;
+            if (this.vy > 600) this.vy = 600;
+
+            // X Movement
+            this.x += this.vx * dt;
+            for (const b of blocks) {
+              if (!b.solid) continue;
+              if (checkAABB(this, b)) {
+                if (this.vx > 0) {
+                  this.x = b.x - this.w;
+                  this.vx = -this.vx;
+                } else if (this.vx < 0) {
+                  this.x = b.x + b.w;
+                  this.vx = -this.vx;
+                }
+              }
+            }
+
+            // Y Movement
+            this.y += this.vy * dt;
+            this.isGrounded = false;
+            for (const b of blocks) {
+              if (!b.solid) continue;
+              if (checkAABB(this, b)) {
+                if (this.vy > 0) {
+                  this.y = b.y - this.h;
+                  this.vy = 0;
+                  this.isGrounded = true;
+                }
+              }
+            }
+
+            // Off screen or fallen into pit
+            if (this.y > VIEW_HEIGHT + 100) {
+              this.alive = false;
+              this.squashedTimer = 0;
+            }
+          }
+
+          stomp() {
+            this.alive = false;
+            this.squashedTimer = 0.5;
+            this.h = 12;
+            this.y += 16;
+            Sound.stomp();
+            score += 200;
+            addFloatingText(this.x + 4, this.y, '200', '#ffffff');
+          }
+        }
+
+        // --- ENEMY CLASS (KOOPA TROOPA) ---
+        class Koopa {
+          constructor(x, y, isBlue = false) {
+            this.x = x;
+            this.y = y;
+            this.w = 28;
+            this.h = 36;
+            this.vx = -45;
+            this.vy = 0;
+            this.alive = true;
+            this.inShell = false;
+            this.sliding = false;
+            this.active = false;
+            this.animTimer = 0;
+            this.isBlue = isBlue;
+            this.facing = -1;
+          }
+
+          update(dt) {
+            if (!this.active) {
+              if (this.x < cameraX + VIEW_WIDTH + 60) this.active = true;
+              return;
+            }
+            if (!this.alive) return;
+
+            this.animTimer += dt * 6;
+            this.vy += GRAVITY * dt;
+            if (this.vy > 600) this.vy = 600;
+
+            // X Movement
+            this.x += this.vx * dt;
+            if (this.vx > 0) this.facing = 1;
+            else if (this.vx < 0) this.facing = -1;
+
+            for (const b of blocks) {
+              if (!b.solid) continue;
+              if (checkAABB(this, b)) {
+                if (this.vx > 0) {
+                  this.x = b.x - this.w;
+                  this.vx = -this.vx;
+                  if (this.sliding) Sound.bump();
+                } else if (this.vx < 0) {
+                  this.x = b.x + b.w;
+                  this.vx = -this.vx;
+                  if (this.sliding) Sound.bump();
+                }
+              }
+            }
+
+            // Y Movement
+            this.y += this.vy * dt;
+            for (const b of blocks) {
+              if (!b.solid) continue;
+              if (checkAABB(this, b)) {
+                if (this.vy > 0) {
+                  this.y = b.y - this.h;
+                  this.vy = 0;
+                }
+              }
+            }
+
+            // Shell hitting other enemies when sliding!
+            if (this.sliding) {
+              enemies.forEach(other => {
+                if (other !== this && other.alive && checkAABB(this, other)) {
+                  other.alive = false;
+                  if (other.stomp) other.stomp();
+                  Sound.stomp();
+                  score += 400;
+                  addFloatingText(other.x, other.y, '400', '#ffd700');
+                }
+              });
+            }
+
+            if (this.y > VIEW_HEIGHT + 100) this.alive = false;
+          }
+
+          stomp(playerFacing = 1) {
+            if (!this.inShell) {
+              // Hide in shell
+              this.inShell = true;
+              this.vx = 0;
+              this.h = 24;
+              this.y += 12;
+              Sound.stomp();
+              score += 200;
+              addFloatingText(this.x + 4, this.y, '200', '#ffffff');
+            } else if (!this.sliding) {
+              // Kick sliding shell!
+              this.sliding = true;
+              this.vx = (playerFacing >= 0 ? 1 : -1) * 320;
+              Sound.stomp();
+              score += 400;
+              addFloatingText(this.x + 4, this.y, 'SHELL KICK!', '#ffff00');
+            } else {
+              // Stop sliding shell
+              this.sliding = false;
+              this.vx = 0;
+              Sound.stomp();
+            }
+          }
+        }
+
+        // --- BOSS CLASS (BOWSER / CASTLE BOSS) ---
+        class BowserBoss {
+          constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.w = 56;
+            this.h = 56;
+            this.vx = -30;
+            this.vy = 0;
+            this.startX = x;
+            this.alive = true;
+            this.active = false;
+            this.defeated = false;
+            this.fireTimer = 2.0;
+            this.jumpTimer = 2.8;
+            this.facing = -1;
+            this.animTimer = 0;
+            this.health = 5;
+          }
+
+          update(dt) {
+            if (!this.active) {
+              if (this.x < cameraX + VIEW_WIDTH + 80) {
+                this.active = true;
+                Sound.bossRoar();
+              }
+              return;
+            }
+
+            if (this.defeated) {
+              this.vy += GRAVITY * dt;
+              this.y += this.vy * dt;
+              return;
+            }
+
+            this.animTimer += dt * 6;
+
+            // Paces back and forth along the bridge
+            this.x += this.vx * dt;
+            if (this.x < this.startX - 150) {
+              this.x = this.startX - 150;
+              this.vx = 35;
+            } else if (this.x > this.startX + 60) {
+              this.x = this.startX + 60;
+              this.vx = -35;
+            }
+
+            // Bowser jump
+            this.jumpTimer -= dt;
+            if (this.jumpTimer <= 0) {
+              this.jumpTimer = 2.6 + Math.random() * 1.5;
+              this.vy = -340;
+            }
+
+            this.vy += GRAVITY * dt;
+            if (this.vy > 550) this.vy = 550;
+            this.y += this.vy * dt;
+
+            // Keep on bridge
+            if (this.y > GROUND_Y - this.h) {
+              this.y = GROUND_Y - this.h;
+              this.vy = 0;
+            }
+
+            // Breathe fireballs towards player
+            this.fireTimer -= dt;
+            if (this.fireTimer <= 0) {
+              this.fireTimer = 2.4 + Math.random() * 1.4;
+              Sound.bossRoar();
+              bossFireballs.push(new BossFireball(this.x - 14, this.y + 14, -145));
+              addFloatingText(this.x, this.y - 12, '🔥 FIRE!', '#ff3300');
+            }
+          }
+
+          defeat() {
+            if (this.defeated) return;
+            this.defeated = true;
+            this.vy = -220;
+            Sound.die();
+            score += 5000;
+            addFloatingText(this.x, this.y - 30, '⭐ 5000 BOWSER DEFEATED! ⭐', '#ffd700');
+          }
+        }
+
+        // --- BOSS FIREBALL ---
+        class BossFireball {
+          constructor(x, y, vx) {
+            this.x = x;
+            this.y = y;
+            this.w = 24;
+            this.h = 16;
+            this.vx = vx;
+            this.alive = true;
+            this.animTimer = 0;
+          }
+
+          update(dt) {
+            this.x += this.vx * dt;
+            this.animTimer += dt * 12;
+            if (this.x < cameraX - 80) {
+              this.alive = false;
+            }
+          }
+        }
+
+        // --- ITEMS & PARTICLES ---
+        class SuperMushroom {
+          constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.w = 24;
+            this.h = 24;
+            this.vx = 75;
+            this.vy = -60;
+            this.alive = true;
+            this.emergeTimer = 0.3;
+          }
+
+          update(dt) {
+            if (this.emergeTimer > 0) {
+              this.emergeTimer -= dt;
+              this.y -= 30 * dt;
+              return;
+            }
+
+            this.vy += GRAVITY * dt;
+            if (this.vy > 550) this.vy = 550;
+
+            this.x += this.vx * dt;
+            for (const b of blocks) {
+              if (!b.solid) continue;
+              if (checkAABB(this, b)) {
+                if (this.vx > 0) {
+                  this.x = b.x - this.w;
+                  this.vx = -this.vx;
+                } else if (this.vx < 0) {
+                  this.x = b.x + b.w;
+                  this.vx = -this.vx;
+                }
+              }
+            }
+
+            this.y += this.vy * dt;
+            for (const b of blocks) {
+              if (!b.solid) continue;
+              if (checkAABB(this, b)) {
+                if (this.vy > 0) {
+                  this.y = b.y - this.h;
+                  this.vy = 0;
+                }
+              }
+            }
+
+            if (this.y > VIEW_HEIGHT + 60) this.alive = false;
+          }
+        }
+
+        class FloatingCoin {
+          constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.w = 20;
+            this.h = 24;
+            this.animTimer = Math.random() * 10;
+            this.collected = false;
+          }
+
+          update(dt) {
+            this.animTimer += dt * 7;
+          }
+        }
+
+        class BounceCoin {
+          constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.vy = -340;
+            this.alpha = 1.0;
+            this.animTimer = 0;
+          }
+
+          update(dt) {
+            this.y += this.vy * dt;
+            this.vy += 900 * dt;
+            this.animTimer += dt * 14;
+            this.alpha -= 1.2 * dt;
+          }
+        }
+
+        class BrickParticle {
+          constructor(x, y, vx, vy) {
+            this.x = x;
+            this.y = y;
+            this.vx = vx;
+            this.vy = vy;
+            this.rotation = 0;
+            this.life = 1.2;
+          }
+
+          update(dt) {
+            this.x += this.vx * dt;
+            this.y += this.vy * dt;
+            this.vy += 1200 * dt;
+            this.rotation += 8 * dt;
+            this.life -= dt;
+          }
+        }
+
+        function createBrickDebris(x, y) {
+          particles.push(new BrickParticle(x + 4, y + 4, -140, -380));
+          particles.push(new BrickParticle(x + 18, y + 4, 140, -380));
+          particles.push(new BrickParticle(x + 4, y + 18, -100, -260));
+          particles.push(new BrickParticle(x + 18, y + 18, 100, -260));
+        }
+
+        function createDust(x, y) {
+          for (let i = 0; i < 4; i++) {
+            particles.push({
+              x: x + (Math.random() - 0.5) * 16,
+              y: y - 2,
+              vx: (Math.random() - 0.5) * 60,
+              vy: -Math.random() * 40,
+              r: 3 + Math.random() * 3,
+              alpha: 0.8,
+              update: function(dt) {
+                this.x += this.vx * dt;
+                this.y += this.vy * dt;
+                this.alpha -= 2.5 * dt;
+              }
+            });
+          }
+        }
+
+        function createDoubleJumpEffect(x, y) {
+          for (let i = 0; i < 10; i++) {
+            const angle = (Math.PI * 2 / 10) * i;
+            const spd = 65 + Math.random() * 55;
+            particles.push({
+              x: x,
+              y: y,
+              vx: Math.cos(angle) * spd,
+              vy: Math.sin(angle) * spd * 0.6 + 15,
+              r: 3.5,
+              alpha: 1.0,
+              color: '#00ffff',
+              update: function(dt) {
+                this.x += this.vx * dt;
+                this.y += this.vy * dt;
+                this.alpha -= 2.6 * dt;
+              }
+            });
+          }
+        }
+
+        function addFloatingText(x, y, text, color = '#fff') {
+          floatingTexts.push({
+            x: x,
+            y: y,
+            text: text,
+            color: color,
+            alpha: 1.0,
+            vy: -45,
+            update: function(dt) {
+              this.y += this.vy * dt;
+              this.alpha -= 1.1 * dt;
+            }
+          });
+        }
+
+        class SkyBird {
+          constructor(x, y, speed = 48, size = 1.0, color = '#1c2844') {
+            this.x = x;
+            this.baseY = y;
+            this.y = y;
+            this.speed = speed;
+            this.size = size;
+            this.color = color;
+            this.wingTimer = Math.random() * 10;
+            this.flapSpeed = 8 + Math.random() * 4;
+            this.waveOffset = Math.random() * Math.PI * 2;
+          }
+
+          update(dt) {
+            this.x += this.speed * dt;
+            this.wingTimer += dt * this.flapSpeed;
+            this.y = this.baseY + Math.sin(this.wingTimer * 0.35 + this.waveOffset) * 6;
+
+            if (this.speed > 0 && this.x > LEVEL_WIDTH + 300) {
+              this.x = -200;
+            } else if (this.speed < 0 && this.x < -300) {
+              this.x = LEVEL_WIDTH + 200;
+            }
+          }
+        }
+
+        class SkyAeroplane {
+          constructor(x, y, speed = 65) {
+            this.x = x;
+            this.baseY = y;
+            this.y = y;
+            this.speed = speed;
+            this.propTimer = 0;
+            this.smokeTimer = 0;
+            this.bannerWave = 0;
+          }
+
+          update(dt) {
+            this.x += this.speed * dt;
+            this.propTimer += dt * 32;
+            this.bannerWave += dt * 4.5;
+            this.y = this.baseY + Math.sin(this.bannerWave * 0.4) * 4;
+
+            this.smokeTimer += dt;
+            if (this.smokeTimer > 0.16) {
+              this.smokeTimer = 0;
+              particles.push({
+                x: this.x - 36,
+                y: this.y + 4 + (Math.random() - 0.5) * 4,
+                vx: -22 - Math.random() * 12,
+                vy: (Math.random() - 0.5) * 6,
+                r: 3 + Math.random() * 2,
+                alpha: 0.7,
+                color: '#ffffff',
+                update: function(pdt) {
+                  this.x += this.vx * pdt;
+                  this.y += this.vy * pdt;
+                  this.r += pdt * 3.5;
+                  this.alpha -= pdt * 0.85;
+                }
+              });
+            }
+
+            if (this.x > LEVEL_WIDTH + 600) {
+              this.x = -350;
+            }
+          }
+        }
+
+        // --- AABB COLLISION HELPER ---
+        function checkAABB(r1, r2) {
+          return (
+            r1.x < r2.x + r2.w &&
+            r1.x + r1.w > r2.x &&
+            r1.y < r2.y + r2.h &&
+            r1.y + r1.h > r2.y
+          );
+        }
+
+        // --- LEVEL GENERATION (MULTI-STAGE ENGINE) ---
+
+        // Helper to add ground segment
+        function addGround(startX, endX) {
+          const width = endX - startX;
+          // Top ground block
+          blocks.push(new Block(startX, GROUND_Y, width, 32, BlockType.GROUND));
+          // Underground fill
+          blocks.push(new Block(startX, GROUND_Y + 32, width, 32, BlockType.STONE));
+        }
+
+        // Pipes helper
+        function addPipe(x, y, height) {
+          blocks.push(new Block(x, y, 64, height, BlockType.PIPE));
+        }
+
+        // Staircase helper
+        function addStairs(startX, steps, dir = 1) {
+          for (let step = 1; step <= steps; step++) {
+            const currentX = dir === 1 ? startX + (step - 1) * 32 : startX + (steps - step) * 32;
+            const h = step * 32;
+            blocks.push(new Block(currentX, GROUND_Y - h, 32, h, BlockType.STONE));
+          }
+        }
+
+        function buildStage1() {
+
+          // Ground with pits
+          addGround(0, 1152); // Segment 1
+          addGround(1248, 1920); // Segment 2
+          addGround(2048, 2560); // Segment 3
+          addGround(2656, 3600); // Segment 4 (to castle)
+
+          addPipe(544, GROUND_Y - 64, 64);
+          addPipe(736, GROUND_Y - 96, 96);
+          addPipe(960, GROUND_Y - 128, 128);
+          addPipe(1440, GROUND_Y - 64, 64);
+          addPipe(2240, GROUND_Y - 96, 96);
+
+          // Starting Blocks
+          blocks.push(new Block(256, GROUND_Y - 96, 32, 32, BlockType.QUESTION, 'coin'));
+
+          // Block cluster 1
+          blocks.push(new Block(384, GROUND_Y - 96, 32, 32, BlockType.BRICK));
+          blocks.push(new Block(416, GROUND_Y - 96, 32, 32, BlockType.QUESTION, 'mushroom'));
+          blocks.push(new Block(448, GROUND_Y - 96, 32, 32, BlockType.BRICK));
+          blocks.push(new Block(480, GROUND_Y - 96, 32, 32, BlockType.QUESTION, 'coin'));
+          blocks.push(new Block(512, GROUND_Y - 96, 32, 32, BlockType.BRICK));
+
+          // High platform over pipe 3
+          blocks.push(new Block(992, GROUND_Y - 192, 32, 32, BlockType.QUESTION, 'coin'));
+
+          // Floating platforms across pit 1 & 2
+          blocks.push(new Block(1184, GROUND_Y - 80, 48, 20, BlockType.BRICK)); // bridge stepping stone
+
+          // Brick and question row 2
+          blocks.push(new Block(1536, GROUND_Y - 96, 32, 32, BlockType.BRICK));
+          blocks.push(new Block(1568, GROUND_Y - 96, 32, 32, BlockType.QUESTION, 'mushroom'));
+          blocks.push(new Block(1600, GROUND_Y - 96, 32, 32, BlockType.BRICK));
+
+          // Upper tier bricks with coins on top
+          for (let i = 0; i < 6; i++) {
+            blocks.push(new Block(1632 + i * 32, GROUND_Y - 192, 32, 32, BlockType.BRICK));
+            coinsList.push(new FloatingCoin(1638 + i * 32, GROUND_Y - 228));
+          }
+
+          // Bridge stones over Pit 2
+          blocks.push(new Block(1952, GROUND_Y - 90, 64, 20, BlockType.BRICK));
+
+          // Pyramids before flagpole
+          addStairs(2336, 4, 1);
+          addStairs(2464, 4, -1);
+
+          // Giant staircase leading to Flagpole
+          addStairs(2880, 8, 1);
+          // 1 tile step after giant staircase
+          blocks.push(new Block(3136, GROUND_Y - 32, 32, 32, BlockType.STONE));
+
+          // Flagpole
+          flagpole = {
+            x: 3152,
+            baseY: GROUND_Y - 32,
+            topY: 110,
+            flagY: 120,
+            reached: false
+          };
+
+          // Castle
+          castle = {
+            x: 3260,
+            y: GROUND_Y - 140,
+            w: 160,
+            h: 140,
+            doorX: 3320,
+            doorW: 40,
+            doorH: 60,
+            flagY: GROUND_Y - 140,
+            flagRaised: false
+          };
+
+          // Collectible coins scattered across platforms
+          coinsList.push(new FloatingCoin(320, GROUND_Y - 40));
+          coinsList.push(new FloatingCoin(352, GROUND_Y - 40));
+          coinsList.push(new FloatingCoin(640, GROUND_Y - 40));
+          coinsList.push(new FloatingCoin(672, GROUND_Y - 40));
+          coinsList.push(new FloatingCoin(860, GROUND_Y - 40));
+          coinsList.push(new FloatingCoin(1320, GROUND_Y - 40));
+          coinsList.push(new FloatingCoin(1360, GROUND_Y - 40));
+          coinsList.push(new FloatingCoin(1400, GROUND_Y - 40));
+          coinsList.push(new FloatingCoin(2112, GROUND_Y - 40));
+          coinsList.push(new FloatingCoin(2150, GROUND_Y - 40));
+          coinsList.push(new FloatingCoin(2740, GROUND_Y - 40));
+          coinsList.push(new FloatingCoin(2780, GROUND_Y - 40));
+
+          // Populate Goombas
+          const enemyXs = [320, 620, 840, 1100, 1340, 1720, 1820, 2180, 2680, 2780];
+          enemyXs.forEach(ex => {
+            enemies.push(new Goomba(ex, GROUND_Y - 32));
+          });
+
+          // Koopa Troopas
+          enemies.push(new Koopa(1080, GROUND_Y - 36, false));
+          enemies.push(new Koopa(2180, GROUND_Y - 36, false));
+
+          // Sky Aeroplane cruising across the upper sky
+          skyPlanes.push(new SkyAeroplane(160, 50, 65));
+
+          // Sky Birds flying at various altitudes, speeds, and formations
+          skyBirds.push(new SkyBird(80, 110, 48, 1.0, '#1c2844'));
+          skyBirds.push(new SkyBird(140, 95, 52, 0.9, '#243356'));
+          skyBirds.push(new SkyBird(200, 125, 46, 0.85, '#2e426e'));
+
+          skyBirds.push(new SkyBird(760, 80, 54, 1.1, '#1c2844'));
+          skyBirds.push(new SkyBird(820, 68, 50, 0.95, '#243356'));
+
+          skyBirds.push(new SkyBird(1580, 130, 44, 1.0, '#1c2844'));
+          skyBirds.push(new SkyBird(1650, 112, 48, 0.9, '#243356'));
+          skyBirds.push(new SkyBird(1720, 140, 45, 0.8, '#2e426e'));
+
+          skyBirds.push(new SkyBird(2420, 90, 52, 1.05, '#1c2844'));
+          skyBirds.push(new SkyBird(2490, 78, 49, 0.95, '#243356'));
+        }
+
+        // --- STAGE 2: UNDERGROUND CAVERN ---
+        function buildStage2() {
+          // Stone Ceiling
+          blocks.push(new Block(0, 0, 3600, 32, BlockType.STONE));
+
+          // Ground Segments with Chasm Pits
+          addGround(0, 800);
+          addGround(992, 1728);
+          addGround(1952, 2560);
+          addGround(2720, 3600);
+
+          // Deep Cavern Pipes
+          addPipe(384, GROUND_Y - 64, 64);
+          addPipe(640, GROUND_Y - 112, 112);
+          addPipe(1216, GROUND_Y - 96, 96);
+          addPipe(1504, GROUND_Y - 128, 128);
+          addPipe(2240, GROUND_Y - 96, 96);
+
+          // Pit 1: Stepping Stones (Testing High Jump and Double Jump!)
+          blocks.push(new Block(832, GROUND_Y - 64, 48, 20, BlockType.BRICK));
+          blocks.push(new Block(912, GROUND_Y - 128, 48, 20, BlockType.BRICK));
+          coinsList.push(new FloatingCoin(848, GROUND_Y - 96));
+          coinsList.push(new FloatingCoin(928, GROUND_Y - 160));
+
+          // Underground Starting blocks
+          blocks.push(new Block(224, GROUND_Y - 96, 32, 32, BlockType.QUESTION, 'mushroom'));
+          blocks.push(new Block(256, GROUND_Y - 96, 32, 32, BlockType.BRICK));
+          blocks.push(new Block(288, GROUND_Y - 96, 32, 32, BlockType.QUESTION, 'coin'));
+
+          // Upper tier cavern vault
+          for (let i = 0; i < 8; i++) {
+            blocks.push(new Block(1024 + i * 32, GROUND_Y - 160, 32, 32, BlockType.BRICK));
+            coinsList.push(new FloatingCoin(1030 + i * 32, GROUND_Y - 196));
+          }
+
+          // Pit 2: High platform bridge over deep chasm
+          blocks.push(new Block(1760, GROUND_Y - 80, 48, 20, BlockType.BRICK));
+          blocks.push(new Block(1840, GROUND_Y - 130, 48, 20, BlockType.BRICK));
+          coinsList.push(new FloatingCoin(1776, GROUND_Y - 112));
+          coinsList.push(new FloatingCoin(1856, GROUND_Y - 162));
+
+          // Multi-layer brick maze in segment 3
+          blocks.push(new Block(2048, GROUND_Y - 96, 32, 32, BlockType.BRICK));
+          blocks.push(new Block(2080, GROUND_Y - 96, 32, 32, BlockType.QUESTION, 'mushroom'));
+          blocks.push(new Block(2112, GROUND_Y - 96, 32, 32, BlockType.BRICK));
+          blocks.push(new Block(2144, GROUND_Y - 96, 32, 32, BlockType.QUESTION, 'coin'));
+
+          // Pit 3: Double Jump Challenge
+          blocks.push(new Block(2592, GROUND_Y - 96, 64, 20, BlockType.BRICK));
+          coinsList.push(new FloatingCoin(2616, GROUND_Y - 136));
+
+          // Staircase to exit
+          addStairs(2880, 7, 1);
+          blocks.push(new Block(3104, GROUND_Y - 32, 32, 32, BlockType.STONE));
+
+          // Flagpole & Exit Castle
+          flagpole = {
+            x: 3152,
+            baseY: GROUND_Y - 32,
+            topY: 110,
+            flagY: 120,
+            reached: false
+          };
+
+          castle = {
+            x: 3260,
+            y: GROUND_Y - 140,
+            w: 160,
+            h: 140,
+            doorX: 3320,
+            doorW: 40,
+            doorH: 60,
+            flagY: GROUND_Y - 140,
+            flagRaised: false
+          };
+
+          // Blue Underground Enemies
+          const goombaXs = [320, 560, 1100, 1380, 1640, 2080, 2400, 2800];
+          goombaXs.forEach(ex => enemies.push(new Goomba(ex, GROUND_Y - 32)));
+
+          // Blue Koopas
+          enemies.push(new Koopa(720, GROUND_Y - 36, true));
+          enemies.push(new Koopa(1440, GROUND_Y - 36, true));
+          enemies.push(new Koopa(2160, GROUND_Y - 36, true));
+        }
+
+        // --- STAGE 3: BOWSER'S LAVA CASTLE ---
+        function buildStage3() {
+          // Castle Ceiling
+          blocks.push(new Block(0, 0, 3600, 32, BlockType.STONE));
+
+          // Castle Ground Segments with Molten Lava Hazards
+          addGround(0, 512);
+
+          // Lava Lake 1
+          blocks.push(new Block(512, GROUND_Y + 10, 256, 40, BlockType.LAVA));
+          // Stepping pillars over Lava 1
+          blocks.push(new Block(576, GROUND_Y - 48, 48, 48, BlockType.STONE));
+          blocks.push(new Block(672, GROUND_Y - 72, 48, 72, BlockType.STONE));
+          coinsList.push(new FloatingCoin(592, GROUND_Y - 80));
+          coinsList.push(new FloatingCoin(688, GROUND_Y - 104));
+
+          addGround(768, 1248);
+
+          // Castle Question blocks
+          blocks.push(new Block(864, GROUND_Y - 96, 32, 32, BlockType.QUESTION, 'mushroom'));
+          blocks.push(new Block(928, GROUND_Y - 96, 32, 32, BlockType.BRICK));
+          blocks.push(new Block(960, GROUND_Y - 96, 32, 32, BlockType.BRICK));
+          blocks.push(new Block(992, GROUND_Y - 96, 32, 32, BlockType.QUESTION, 'coin'));
+
+          // Lava Lake 2
+          blocks.push(new Block(1248, GROUND_Y + 10, 352, 40, BlockType.LAVA));
+          // Upper suspended brick bridge
+          for (let i = 0; i < 7; i++) {
+            blocks.push(new Block(1312 + i * 32, GROUND_Y - 110, 32, 32, BlockType.BRICK));
+            coinsList.push(new FloatingCoin(1318 + i * 32, GROUND_Y - 146));
+          }
+
+          addGround(1600, 2144);
+          // High battlements
+          for (let i = 0; i < 6; i++) {
+            blocks.push(new Block(1728 + i * 32, GROUND_Y - 128, 32, 32, BlockType.BRICK));
+          }
+          blocks.push(new Block(1824, GROUND_Y - 160, 32, 32, BlockType.QUESTION, 'mushroom'));
+
+          // Lava Lake 3
+          blocks.push(new Block(2144, GROUND_Y + 10, 288, 40, BlockType.LAVA));
+          blocks.push(new Block(2208, GROUND_Y - 60, 48, 20, BlockType.BRICK));
+          blocks.push(new Block(2304, GROUND_Y - 100, 48, 20, BlockType.BRICK));
+
+          // Castle Approach
+          addGround(2432, 2520);
+
+          // --- THE GREAT BOWSER BRIDGE & LAVA MOAT ---
+          const bridgeStartX = 2520;
+          const bridgeLength = 540;
+          // Lava underneath the bridge
+          blocks.push(new Block(bridgeStartX - 20, GROUND_Y + 10, bridgeLength + 140, 40, BlockType.LAVA));
+
+          // Chain Link Bridge blocks
+          for (let bx = bridgeStartX; bx < bridgeStartX + bridgeLength; bx += 32) {
+            blocks.push(new Block(bx, GROUND_Y - 32, 32, 32, BlockType.BRIDGE));
+          }
+
+          // BOWSER BOSS
+          bowser = new BowserBoss(bridgeStartX + 360, GROUND_Y - 32 - 56);
+
+          // THE GOLDEN AXE SWITCH (behind Bowser!)
+          axeBlock = new Block(bridgeStartX + bridgeLength + 16, GROUND_Y - 56, 32, 32, BlockType.AXE);
+          blocks.push(axeBlock);
+
+          // Royal Castle Chamber
+          addGround(bridgeStartX + bridgeLength + 48, 3600);
+
+          // Final Flagpole & Royal Castle
+          flagpole = {
+            x: 3180,
+            baseY: GROUND_Y - 32,
+            topY: 110,
+            flagY: 120,
+            reached: false
+          };
+
+          castle = {
+            x: 3280,
+            y: GROUND_Y - 140,
+            w: 160,
+            h: 140,
+            doorX: 3340,
+            doorW: 40,
+            doorH: 60,
+            flagY: GROUND_Y - 140,
+            flagRaised: false
+          };
+
+          // Castle Enemies
+          const goombaXs = [280, 440, 880, 1080, 1680, 1960];
+          goombaXs.forEach(ex => enemies.push(new Goomba(ex, GROUND_Y - 32)));
+
+          // Koopas
+          enemies.push(new Koopa(1020, GROUND_Y - 36, false));
+          enemies.push(new Koopa(1860, GROUND_Y - 36, false));
+        }
+
+        // Main Level Dispatcher
+        function buildLevel(stageNum = currentStage) {
+          blocks = [];
+          enemies = [];
+          items = [];
+          coinsList = [];
+          particles = [];
+          floatingTexts = [];
+          bossFireballs = [];
+          skyBirds = [];
+          skyPlanes = [];
+          bowser = null;
+          axeBlock = null;
+
+          if (stageNum === 2) {
+            buildStage2();
+          } else if (stageNum === 3) {
+            buildStage3();
+          } else {
+            buildStage1();
+          }
+        }
+
+        function startStage(stageNum) {
+          currentStage = Math.max(1, Math.min(TOTAL_STAGES, stageNum));
+          const stageSelect = document.getElementById('stage-select');
+          if (stageSelect) stageSelect.value = currentStage.toString();
+          levelTime = 400;
+          timeTimer = 0;
+          cameraX = 0;
+          victoryTimer = 0;
+          victoryBonusCalculated = false;
+          buildLevel(currentStage);
+          if (!player) {
+            player = new Player(80, GROUND_Y - 40);
+          } else {
+            player.reset(80, GROUND_Y - 40);
+          }
+          currentState = GameState.STAGE_CARD;
+          stageCardTimer = 1.3;
+          bgmNoteIndex = 0;
+          bgmTimer = 0;
+        }
+
+        function startGame() {
+          startStage(currentStage);
+        }
+
+        function resetGame(fullReset = false) {
+          if (fullReset) {
+            score = 0;
+            coins = 0;
+            lives = 3;
+            currentStage = 1;
+            const stageSelect = document.getElementById('stage-select');
+            if (stageSelect) stageSelect.value = '1';
+          }
+          levelTime = 400;
+          timeTimer = 0;
+          cameraX = 0;
+          victoryTimer = 0;
+          victoryBonusCalculated = false;
+          buildLevel(currentStage);
+          if (!player) {
+            player = new Player(80, GROUND_Y - 40);
+          } else {
+            player.reset(80, GROUND_Y - 40);
+          }
+          currentState = GameState.START;
+        }
+
+        // Initialize world
+        resetGame(true);
+
+        // --- DRAWING ROUTINES (PIXEL ART WITH CANVAS) ---
+
+        function drawBackground(camX) {
+          if (currentStage === 2) {
+            // --- STAGE 2: UNDERGROUND CAVERN ---
+            ctx.fillStyle = '#050814';
+            ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+
+            // Cavern ceiling stalactites and rock pillars (anchored to world coords: wx - camX)
+            for (let wx = 0; wx < LEVEL_WIDTH + 200; wx += 180) {
+              const x = wx - camX;
+              if (x > -100 && x < VIEW_WIDTH + 100) {
+                ctx.fillStyle = '#0c152b';
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x + 25, 90);
+                ctx.lineTo(x + 50, 0);
+                ctx.fill();
+
+                // Distant stone pillar
+                ctx.fillRect(x + 80, 0, 36, VIEW_HEIGHT);
+
+                // Foreground pillar with cyan trim
+                ctx.fillStyle = '#142244';
+                ctx.fillRect(x + 130, 0, 48, VIEW_HEIGHT);
+                ctx.fillStyle = '#008088';
+                ctx.fillRect(x + 134, 0, 4, VIEW_HEIGHT);
+              }
+            }
+          } else if (currentStage === 3) {
+            // --- STAGE 3: BOWSER'S LAVA CASTLE ---
+            ctx.fillStyle = '#120507';
+            ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+
+            // Bottom Lava Glow Gradient
+            const glow = ctx.createLinearGradient(0, VIEW_HEIGHT - 180, 0, VIEW_HEIGHT);
+            glow.addColorStop(0, 'rgba(255, 60, 0, 0.0)');
+            glow.addColorStop(1, 'rgba(255, 40, 0, 0.4)');
+            ctx.fillStyle = glow;
+            ctx.fillRect(0, VIEW_HEIGHT - 180, VIEW_WIDTH, 180);
+
+            // Fortress brick battlements & columns (anchored to world coords: wx - camX)
+            for (let wx = 0; wx < LEVEL_WIDTH + 200; wx += 220) {
+              const x = wx - camX;
+              if (x > -100 && x < VIEW_WIDTH + 100) {
+                ctx.fillStyle = '#220d12';
+                ctx.fillRect(x, 0, 52, VIEW_HEIGHT);
+
+                // Castle arch window
+                ctx.fillStyle = '#090203';
+                ctx.beginPath();
+                ctx.arc(x + 26, 120, 14, Math.PI, 0);
+                ctx.rect(x + 12, 120, 28, 40);
+                ctx.fill();
+
+                // Torch flame in window
+                const flicker = Math.sin(Date.now() / 80 + wx) * 2;
+                ctx.fillStyle = '#ff9900';
+                ctx.beginPath();
+                ctx.arc(x + 26, 135 + flicker, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#ffff55';
+                ctx.beginPath();
+                ctx.arc(x + 26, 135 + flicker, 3, 0, Math.PI * 2);
+                ctx.fill();
+              }
+            }
+          } else {
+            // --- STAGE 1: VIBRANT OVERWORLD SKY ---
+            ctx.fillStyle = '#5c94fc';
+            ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+
+            // 1. Distant Brown Mountains (Anchored to world coordinates: wx - camX)
+            // As Mario runs forward, the mountains stay fixed in place and scroll backward.
+            const mountainWorldXs = [0, 680, 1360, 2040, 2720];
+            for (const wx of mountainWorldXs) {
+              const x = wx - camX;
+              if (x > -260 && x < VIEW_WIDTH + 60) {
+                drawMountain(x, GROUND_Y);
+              }
+            }
+
+            // 2. Fluffy Clouds (Anchored to world coordinates: wx - camX)
+            // Fixed positions across the sky so Mario runs past them.
+            const cloudPositions = [
+              { x: 120, y: 70, s: 1.0 },
+              { x: 380, y: 120, s: 0.8 },
+              { x: 620, y: 60, s: 1.1 },
+              { x: 920, y: 110, s: 0.85 },
+              { x: 1240, y: 75, s: 1.0 },
+              { x: 1540, y: 130, s: 0.8 },
+              { x: 1820, y: 65, s: 1.05 },
+              { x: 2180, y: 115, s: 0.9 },
+              { x: 2520, y: 70, s: 1.0 },
+              { x: 2840, y: 125, s: 0.8 },
+              { x: 3120, y: 80, s: 1.0 },
+            ];
+            for (const cp of cloudPositions) {
+              const x = cp.x - camX;
+              if (x > -180 && x < VIEW_WIDTH + 80) {
+                drawCloud(x, cp.y, cp.s);
+              }
+            }
+
+            // 3. Rolling Green Hills & Bushes (Anchored to world coordinates: wx - camX)
+            const hillWorldXs = [240, 880, 1520, 2160, 2800];
+            for (const wx of hillWorldXs) {
+              const x = wx - camX;
+              if (x > -120 && x < VIEW_WIDTH + 80) {
+                drawHill(x, GROUND_Y, 88, 54);
+              }
+            }
+
+            const bushWorldXs = [420, 1060, 1700, 2340, 2980];
+            for (const wx of bushWorldXs) {
+              const x = wx - camX;
+              if (x > -100 && x < VIEW_WIDTH + 80) {
+                drawBush(x, GROUND_Y, 60, 26);
+              }
+            }
+          }
+        }
+
+        function drawMountain(x, groundY) {
+          ctx.fillStyle = '#7c4a24';
+          ctx.beginPath();
+          ctx.moveTo(x, groundY);
+          ctx.lineTo(x + 120, groundY - 110);
+          ctx.lineTo(x + 240, groundY);
+          ctx.fill();
+
+          // Mountain highlight / sunlit ridge
+          ctx.fillStyle = '#a66938';
+          ctx.beginPath();
+          ctx.moveTo(x + 60, groundY);
+          ctx.lineTo(x + 120, groundY - 110);
+          ctx.lineTo(x + 140, groundY - 70);
+          ctx.lineTo(x + 100, groundY);
+          ctx.fill();
+
+          // Subtle ridge edge shadow
+          ctx.strokeStyle = '#593215';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(x + 120, groundY - 110);
+          ctx.lineTo(x + 100, groundY);
+          ctx.stroke();
+        }
+
+        function drawCloud(x, y, scale = 1.0) {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.scale(scale, scale);
+          ctx.fillStyle = '#ffffff';
+
+          ctx.beginPath();
+          ctx.arc(40, 25, 20, 0, Math.PI * 2);
+          ctx.arc(65, 18, 25, 0, Math.PI * 2);
+          ctx.arc(95, 22, 22, 0, Math.PI * 2);
+          ctx.arc(120, 28, 16, 0, Math.PI * 2);
+          ctx.rect(35, 25, 95, 18);
+          ctx.fill();
+
+          // Soft blue shadow on bottom edge
+          ctx.fillStyle = '#d4e4ff';
+          ctx.fillRect(35, 38, 95, 5);
+          ctx.restore();
+        }
+
+        function drawHill(x, y, w, h) {
+          ctx.fillStyle = '#00a800';
+          ctx.beginPath();
+          ctx.arc(x + w / 2, y, w / 2, Math.PI, 0);
+          ctx.fill();
+
+          // Highlight rim
+          ctx.strokeStyle = '#004000';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Dots pattern
+          ctx.fillStyle = '#006000';
+          ctx.fillRect(x + w / 2 - 8, y - h * 0.6, 4, 4);
+          ctx.fillRect(x + w / 2 + 6, y - h * 0.4, 4, 4);
+        }
+
+        function drawBush(x, y, w, h) {
+          ctx.fillStyle = '#80d010';
+          ctx.beginPath();
+          ctx.arc(x + 14, y, 14, Math.PI, 0);
+          ctx.arc(x + w / 2, y, 18, Math.PI, 0);
+          ctx.arc(x + w - 14, y, 14, Math.PI, 0);
+          ctx.fill();
+
+          ctx.strokeStyle = '#008000';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        function drawSkyBird(b, camX) {
+          const sx = b.x - camX;
+          if (sx < -60 || sx > VIEW_WIDTH + 60) return;
+
+          ctx.save();
+          ctx.translate(sx, b.y);
+          const dir = b.speed >= 0 ? 1 : -1;
+          ctx.scale(dir * b.size, b.size);
+
+          // Wing flap cycle: -1 to 1
+          const wingPhase = Math.sin(b.wingTimer);
+
+          ctx.fillStyle = b.color;
+          // Body
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 7, 3.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Head & Beak
+          ctx.beginPath();
+          ctx.arc(6, -2, 3, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#ffaa00'; // Yellow/orange beak
+          ctx.beginPath();
+          ctx.moveTo(8, -3);
+          ctx.lineTo(12, -1.5);
+          ctx.lineTo(8, 0);
+          ctx.fill();
+
+          // Eye
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(5, -3, 2, 2);
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(6, -3, 1, 1);
+
+          // Wings (animated flap up/down)
+          ctx.fillStyle = b.color;
+          const wingY = wingPhase * 7;
+          ctx.beginPath();
+          ctx.moveTo(-4, -1);
+          ctx.lineTo(-2, -9 + wingY);
+          ctx.lineTo(4, -1);
+          ctx.fill();
+
+          // Tail feathers
+          ctx.beginPath();
+          ctx.moveTo(-6, -1);
+          ctx.lineTo(-11, -3);
+          ctx.lineTo(-9, 0);
+          ctx.lineTo(-11, 2);
+          ctx.lineTo(-6, 1);
+          ctx.fill();
+
+          ctx.restore();
+        }
+
+        function drawAeroplane(plane, camX) {
+          const sx = plane.x - camX;
+          if (sx < -320 || sx > VIEW_WIDTH + 100) return;
+
+          ctx.save();
+          ctx.translate(sx, plane.y);
+
+          // 1. Tow Cable and Trailing Banner
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(-32, 2);
+          ctx.lineTo(-58, 2);
+          ctx.stroke();
+
+          // Waving Banner
+          const bannerX = -58;
+          const bannerW = 126;
+          const bannerH = 22;
+          const wave = Math.sin(plane.bannerWave) * 3.5;
+
+          ctx.save();
+          ctx.translate(bannerX - bannerW, wave);
+
+          // Banner background cloth
+          ctx.fillStyle = '#ffffff';
+          ctx.strokeStyle = '#e52521';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.rect(0, -11, bannerW, bannerH);
+          ctx.fill();
+          ctx.stroke();
+
+          // Banner grommet holes
+          ctx.fillStyle = '#999999';
+          ctx.fillRect(bannerW - 6, -3, 3, 3);
+
+          // Banner text
+          ctx.fillStyle = '#e52521';
+          ctx.font = 'bold 11px "Courier New", Courier, monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('★ SUPER RETRO ★', bannerW / 2, 4);
+
+          ctx.restore();
+
+          // 2. Retro Red & White Propeller Biplane
+          // Main Fuselage
+          ctx.fillStyle = '#d62420'; // Aviation Red
+          ctx.beginPath();
+          ctx.moveTo(18, -4);
+          ctx.lineTo(24, 0);
+          ctx.lineTo(18, 6);
+          ctx.lineTo(-28, 4);
+          ctx.lineTo(-32, 0);
+          ctx.lineTo(-28, -4);
+          ctx.closePath();
+          ctx.fill();
+
+          // White racing fuselage stripe
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(-22, -1, 38, 3);
+
+          // Yellow cockpit canopy
+          ctx.fillStyle = '#ffe040';
+          ctx.beginPath();
+          ctx.arc(6, -5, 5, Math.PI, 0);
+          ctx.fill();
+          ctx.fillStyle = '#222222';
+          ctx.fillRect(5, -4, 2, 2); // Pilot goggles
+
+          // Top Wing
+          ctx.fillStyle = '#f5f5f5';
+          ctx.fillRect(-12, -14, 30, 4);
+          ctx.fillStyle = '#d62420';
+          ctx.fillRect(-10, -14, 26, 2);
+
+          // Wing struts
+          ctx.strokeStyle = '#666666';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(2, -10); ctx.lineTo(2, -4);
+          ctx.moveTo(12, -10); ctx.lineTo(12, -4);
+          ctx.stroke();
+
+          // Bottom Wing
+          ctx.fillStyle = '#f5f5f5';
+          ctx.fillRect(-8, 5, 26, 4);
+          ctx.fillStyle = '#d62420';
+          ctx.fillRect(-6, 7, 22, 2);
+
+          // Tail Fin & Rudder
+          ctx.fillStyle = '#f5f5f5';
+          ctx.beginPath();
+          ctx.moveTo(-24, -4);
+          ctx.lineTo(-34, -14);
+          ctx.lineTo(-28, -14);
+          ctx.lineTo(-20, -4);
+          ctx.fill();
+
+          // Landing Gear Wheels
+          ctx.fillStyle = '#333333';
+          ctx.beginPath();
+          ctx.arc(-2, 11, 3, 0, Math.PI * 2);
+          ctx.arc(10, 11, 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#666666';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(-2, 7); ctx.lineTo(-2, 11);
+          ctx.moveTo(10, 7); ctx.lineTo(10, 11);
+          ctx.stroke();
+
+          // Spinning Propeller Nose
+          ctx.fillStyle = '#ffff00';
+          ctx.beginPath();
+          ctx.arc(24, 1, 3, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Propeller Blade spin animation
+          const propBlur = Math.sin(plane.propTimer);
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+          ctx.fillRect(25, 1 - 10 * propBlur, 2, 20 * propBlur);
+
+          ctx.restore();
+        }
+
+        function drawBlock(b, camX) {
+          const screenX = Math.round(b.x - camX);
+          const screenY = Math.round(b.y + b.bumpOffset);
+
+          if (screenX + b.w < -20 || screenX > VIEW_WIDTH + 20) return;
+
+          ctx.save();
+          ctx.translate(screenX, screenY);
+
+          if (b.type === BlockType.LAVA) {
+            // Animated Boiling Magma Liquid
+            ctx.fillStyle = '#e52521';
+            ctx.fillRect(0, 0, b.w, b.h);
+
+            // Glowing bubbling magma wave on top surface
+            const wave = Math.sin((Date.now() / 150) + (b.x / 40)) * 3;
+            ctx.fillStyle = '#ff9900';
+            ctx.fillRect(0, 0, b.w, 6 + wave);
+
+            ctx.fillStyle = '#ffff33';
+            for (let lx = 0; lx < b.w; lx += 16) {
+              const spark = Math.sin((Date.now() / 100) + lx) * 3;
+              ctx.fillRect(lx, 2 + spark, 8, 3);
+            }
+          } else if (b.type === BlockType.BRIDGE) {
+            // Wooden Rope/Chain Bridge Planks
+            ctx.fillStyle = '#945220';
+            ctx.fillRect(0, 0, b.w, b.h);
+
+            // Wood plank dividers
+            ctx.fillStyle = '#4a2508';
+            for (let px = 0; px < b.w; px += 16) {
+              ctx.fillRect(px, 0, 2, b.h);
+            }
+            // Iron rim support
+            ctx.fillStyle = '#222222';
+            ctx.fillRect(0, b.h - 4, b.w, 4);
+            // Iron rivets
+            ctx.fillStyle = '#aaaaaa';
+            for (let px = 6; px < b.w; px += 16) {
+              ctx.fillRect(px, 4, 3, 3);
+            }
+          } else if (b.type === BlockType.AXE) {
+            // Golden Battleaxe Switch
+            const glint = (Math.sin(Date.now() / 120) + 1) / 2;
+            ctx.fillStyle = '#5c3a1c';
+            // Wooden stand & haft
+            ctx.fillRect(13, 8, 6, 24);
+
+            // Gold Axe Head
+            ctx.fillStyle = glint > 0.4 ? '#ffea00' : '#ffd700';
+            ctx.beginPath();
+            ctx.moveTo(16, 6);
+            ctx.lineTo(28, 2);
+            ctx.lineTo(26, 20);
+            ctx.lineTo(16, 14);
+            ctx.lineTo(6, 20);
+            ctx.lineTo(4, 2);
+            ctx.closePath();
+            ctx.fill();
+
+            // Blade sparkle
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(22, 4, 3, 3);
+            ctx.fillRect(7, 4, 3, 3);
+          } else if (b.type === BlockType.GROUND) {
+            if (currentStage === 2) {
+              // Underground Cyan/Navy Stone Ground
+              ctx.fillStyle = '#008088';
+              ctx.fillRect(0, 0, b.w, b.h);
+              ctx.fillStyle = '#004048';
+              for (let bx = 0; bx < b.w; bx += 32) {
+                ctx.fillRect(bx, 0, 2, b.h);
+                ctx.fillRect(bx, 16, 32, 2);
+              }
+              // Cyan top rim
+              ctx.fillStyle = '#00e8d8';
+              ctx.fillRect(0, 0, b.w, 4);
+            } else if (currentStage === 3) {
+              // Castle Dark Stone Ground
+              ctx.fillStyle = '#484850';
+              ctx.fillRect(0, 0, b.w, b.h);
+              ctx.fillStyle = '#202028';
+              for (let bx = 0; bx < b.w; bx += 32) {
+                ctx.fillRect(bx, 0, 2, b.h);
+                ctx.fillRect(bx, 16, 32, 2);
+              }
+              // Dark red stone highlight
+              ctx.fillStyle = '#783838';
+              ctx.fillRect(0, 0, b.w, 4);
+            } else {
+              // Overworld Ground top row with vibrant green grass fringe
+              ctx.fillStyle = '#c84c0c';
+              ctx.fillRect(0, 0, b.w, b.h);
+
+              // Brick segment lines
+              ctx.fillStyle = '#802b00';
+              for (let bx = 0; bx < b.w; bx += 32) {
+                ctx.fillRect(bx, 0, 2, b.h);
+                ctx.fillRect(bx, 16, 32, 2);
+              }
+
+              // Green grass on top
+              ctx.fillStyle = '#00a800';
+              ctx.fillRect(0, 0, b.w, 6);
+              ctx.fillStyle = '#80d010';
+              for (let gx = 0; gx < b.w; gx += 8) {
+                ctx.fillRect(gx, 0, 4, 4);
+              }
+            }
+          } else if (b.type === BlockType.STONE) {
+            // Dark stone block
+            ctx.fillStyle = currentStage === 2 ? '#006068' : currentStage === 3 ? '#3a3a42' : '#c84c0c';
+            ctx.fillRect(0, 0, b.w, b.h);
+            ctx.fillStyle = '#000000';
+            ctx.globalAlpha = 0.25;
+            ctx.fillRect(0, 0, b.w, b.h);
+            ctx.globalAlpha = 1.0;
+            ctx.fillStyle = currentStage === 2 ? '#002830' : '#221111';
+            for (let bx = 0; bx < b.w; bx += 32) {
+              ctx.fillRect(bx, 0, 2, b.h);
+              ctx.fillRect(bx + 16, 16, 2, b.h - 16);
+            }
+          } else if (b.type === BlockType.BRICK) {
+            // Classic or Underground/Castle Brick
+            const brickColor = currentStage === 2 ? '#008088' : currentStage === 3 ? '#585860' : '#b84418';
+            const mortarColor = currentStage === 2 ? '#002028' : currentStage === 3 ? '#281818' : '#401000';
+            const topColor = currentStage === 2 ? '#00e8d8' : currentStage === 3 ? '#888890' : '#fce4a0';
+
+            ctx.fillStyle = brickColor;
+            ctx.fillRect(0, 0, b.w, b.h);
+
+            // Mortar seams
+            ctx.fillStyle = mortarColor;
+            ctx.fillRect(0, 14, b.w, 3);
+            ctx.fillRect(15, 0, 2, 14);
+            ctx.fillRect(0, 16, 2, 16);
+            ctx.fillRect(b.w - 2, 16, 2, 16);
+
+            // Brick top highlight
+            ctx.fillStyle = topColor;
+            ctx.fillRect(1, 1, b.w - 2, 2);
+            ctx.fillRect(1, 17, b.w - 2, 2);
+          } else if (b.type === BlockType.QUESTION) {
+            // Pulsing golden question block
+            const pulse = (Math.sin(Date.now() / 140) + 1) / 2;
+            ctx.fillStyle = pulse > 0.5 ? '#fc9838' : '#e48420';
+            ctx.fillRect(0, 0, b.w, b.h);
+
+            // Outer border
+            ctx.strokeStyle = '#803400';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(1, 1, b.w - 2, b.h - 2);
+
+            // 4 Corner bolts
+            ctx.fillStyle = '#401800';
+            ctx.fillRect(3, 3, 3, 3);
+            ctx.fillRect(b.w - 6, 3, 3, 3);
+            ctx.fillRect(3, b.h - 6, 3, 3);
+            ctx.fillRect(b.w - 6, b.h - 6, 3, 3);
+
+            // Center '?' mark with 3D shadow
+            ctx.fillStyle = '#401800';
+            ctx.font = 'bold 20px monospace';
+            ctx.fillText('?', 11, 23);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText('?', 9, 21);
+          } else if (b.type === BlockType.HIT) {
+            // Deactivated metal block
+            ctx.fillStyle = '#8b5a2b';
+            ctx.fillRect(0, 0, b.w, b.h);
+            ctx.strokeStyle = '#4a2810';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(1, 1, b.w - 2, b.h - 2);
+
+            // Inset bevel
+            ctx.fillStyle = '#5c3a1c';
+            ctx.fillRect(4, 4, b.w - 8, b.h - 8);
+
+            // Corner rivets
+            ctx.fillStyle = '#000';
+            ctx.fillRect(3, 3, 2, 2);
+            ctx.fillRect(b.w - 5, 3, 2, 2);
+            ctx.fillRect(3, b.h - 5, 2, 2);
+            ctx.fillRect(b.w - 5, b.h - 5, 2, 2);
+          } else if (b.type === BlockType.PIPE) {
+            // Warp Pipe body (cyan pipe in underground!)
+            const pipeGreen = currentStage === 2 ? '#008888' : '#00a800';
+            const pipeHighlight = currentStage === 2 ? '#00e8e8' : '#80d010';
+            const pipeShadow = currentStage === 2 ? '#004040' : '#005000';
+            const pipeOutline = currentStage === 2 ? '#002020' : '#003800';
+
+            ctx.fillStyle = pipeGreen;
+            ctx.fillRect(0, 0, b.w, b.h);
+
+            // Pipe highlight & shadow
+            ctx.fillStyle = pipeHighlight;
+            ctx.fillRect(6, 0, 8, b.h);
+            ctx.fillStyle = pipeShadow;
+            ctx.fillRect(b.w - 10, 0, 10, b.h);
+
+            // Pipe rim top flange
+            ctx.fillStyle = pipeGreen;
+            ctx.fillRect(-4, 0, b.w + 8, 20);
+            ctx.fillStyle = pipeHighlight;
+            ctx.fillRect(-2, 2, 10, 16);
+            ctx.fillStyle = pipeShadow;
+            ctx.fillRect(b.w - 4, 0, 8, 20);
+
+            // Pipe black rim opening
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, b.w, 4);
+
+            // Outline
+            ctx.strokeStyle = pipeOutline;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(-4, 0, b.w + 8, 20);
+            ctx.strokeRect(0, 20, b.w, b.h - 20);
+          }
+
+          ctx.restore();
+        }
+
+        function drawPlayer(p, camX) {
+          // Invincibility flash: toggle visible
+          if (p.invincibleTimer > 0 && Math.floor(Date.now() / 60) % 2 === 0) {
+            return;
+          }
+
+          const screenX = Math.round(p.x - camX);
+          const screenY = Math.round(p.y);
+
+          ctx.save();
+          ctx.translate(screenX + p.w / 2, screenY + p.h / 2);
+          if (p.isSpinning && p.spinAngle) {
+            ctx.rotate(p.facing > 0 ? p.spinAngle : -p.spinAngle);
+          }
+          ctx.scale(p.facing, 1); // Flip horizontally when facing left
+
+          const isSuper = p.isSuper;
+
+          // Color Palette with Highlights and Shadows
+          const redMain = '#e52521';
+          const redDark = '#9b0f0c';
+          const redLight = '#ff5c58';
+
+          const blueMain = '#0038a8';
+          const blueDark = '#001e66';
+          const blueLight = '#3366cc';
+
+          const skinMain = '#ffcca4';
+          const skinDark = '#e5a578';
+          const skinLight = '#ffe4cf';
+
+          const hairColor = '#502008';
+          const hairDark = '#301004';
+          const shoeColor = '#602808';
+          const shoeSole = '#381400';
+          const buttonGold = '#ffd700';
+
+          if (isSuper) {
+            // ============================================
+            // --- SUPER MARIO (TALL, HIGH-FIDELITY SPRITE) ---
+            // ============================================
+
+            // 1. CAP / HAT (layered visor, dome, crown crease & 'M' emblem crest)
+            ctx.fillStyle = redDark;
+            ctx.fillRect(-10, -27, 20, 11);
+            ctx.fillStyle = redMain;
+            ctx.fillRect(-9, -26, 18, 9);
+            ctx.fillStyle = redLight;
+            ctx.fillRect(-8, -26, 14, 3); // top cap shine
+            // Visor bill with shadow
+            ctx.fillStyle = redMain;
+            ctx.fillRect(2, -22, 11, 4);
+            ctx.fillStyle = redDark;
+            ctx.fillRect(2, -18, 10, 1);
+            // White circular badge on cap front
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(-3, -24, 6, 5);
+            ctx.fillStyle = redDark;
+            ctx.fillRect(-2, -23, 4, 3); // 'M' insignia
+
+            // 2. HAIR & SIDEBURN
+            ctx.fillStyle = hairDark;
+            ctx.fillRect(-11, -21, 6, 7);
+            ctx.fillStyle = hairColor;
+            ctx.fillRect(-10, -20, 5, 5);
+            ctx.fillStyle = hairDark;
+            ctx.fillRect(-12, -16, 4, 3); // back hair tuft
+
+            // 3. FACE & PROFILE
+            ctx.fillStyle = skinMain;
+            ctx.fillRect(-5, -21, 14, 10);
+            ctx.fillStyle = skinLight;
+            ctx.fillRect(-4, -20, 11, 4); // cheek highlight
+            ctx.fillStyle = skinDark;
+            ctx.fillRect(-5, -12, 12, 2); // chin / neck shadow
+
+            // 4. EAR
+            ctx.fillStyle = skinMain;
+            ctx.fillRect(-6, -18, 3, 4);
+            ctx.fillStyle = skinDark;
+            ctx.fillRect(-5, -17, 1, 2);
+
+            // 5. LARGE NOSE & MUSTACHE
+            // Nose (classic protruding Mario bulbous nose with highlight)
+            ctx.fillStyle = skinMain;
+            ctx.fillRect(8, -19, 6, 6);
+            ctx.fillStyle = skinLight;
+            ctx.fillRect(9, -18, 3, 3);
+            ctx.fillStyle = skinDark;
+            ctx.fillRect(9, -13, 5, 1); // nose under-shadow
+
+            // Eye & Pupil with white twinkle
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(3, -19, 4, 4);
+            ctx.fillStyle = '#002878'; // blue iris
+            ctx.fillRect(5, -19, 2, 3);
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(6, -19, 1, 3); // black pupil
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(4, -19, 1, 1); // glint
+
+            // Iconic bushy black-brown mustache
+            ctx.fillStyle = hairDark;
+            ctx.fillRect(2, -15, 11, 4);
+            ctx.fillRect(4, -13, 8, 3);
+            ctx.fillRect(11, -14, 3, 2); // mustache curl
+
+            // 6. SHIRT & ARMS
+            ctx.fillStyle = redDark;
+            ctx.fillRect(-9, -12, 18, 14);
+            ctx.fillStyle = redMain;
+            ctx.fillRect(-8, -11, 16, 12);
+            ctx.fillStyle = redLight;
+            ctx.fillRect(-7, -10, 8, 4); // chest highlight
+            // White cartoon plumber gloves
+            ctx.fillStyle = '#f0f0f0';
+            ctx.fillRect(-11, -5, 5, 6);
+            ctx.fillRect(7, -5, 5, 6);
+            ctx.fillStyle = '#c8c8c8';
+            ctx.fillRect(-11, 0, 5, 2);
+            ctx.fillRect(7, 0, 5, 2);
+
+            // 7. OVERALLS & SUSPENDERS
+            ctx.fillStyle = blueDark;
+            ctx.fillRect(-7, -6, 15, 16);
+            ctx.fillStyle = blueMain;
+            ctx.fillRect(-6, -5, 13, 14);
+            ctx.fillStyle = blueLight;
+            ctx.fillRect(-5, 0, 4, 6); // leg fold highlight
+
+            // Suspenders with gold brass buttons
+            ctx.fillStyle = blueDark;
+            ctx.fillRect(-6, -11, 4, 7);
+            ctx.fillRect(2, -11, 4, 7);
+            ctx.fillStyle = buttonGold;
+            ctx.fillRect(-5, -6, 3, 3);
+            ctx.fillRect(3, -6, 3, 3);
+            ctx.fillStyle = '#b8860b';
+            ctx.fillRect(-4, -5, 1, 1);
+            ctx.fillRect(4, -5, 1, 1);
+
+            // 8. LEGS & WALKING / JUMPING / SKIDDING
+            ctx.fillStyle = blueMain;
+            if (!p.isGrounded) {
+              // High athletic jump pose: forward knee tucked, back leg extended
+              ctx.fillRect(-11, 8, 8, 10);
+              ctx.fillRect(4, 3, 8, 11);
+              // Shoes with defined soles
+              ctx.fillStyle = shoeColor;
+              ctx.fillRect(-13, 16, 10, 6);
+              ctx.fillRect(4, 13, 10, 6);
+              ctx.fillStyle = shoeSole;
+              ctx.fillRect(-13, 21, 11, 2);
+              ctx.fillRect(4, 18, 11, 2);
+            } else if (p.skidding) {
+              // Skidding backward pose
+              ctx.fillRect(-9, 8, 8, 9);
+              ctx.fillRect(2, 8, 8, 9);
+              ctx.fillStyle = shoeColor;
+              ctx.fillRect(-12, 16, 10, 6);
+              ctx.fillRect(3, 16, 10, 6);
+              ctx.fillStyle = shoeSole;
+              ctx.fillRect(-12, 21, 11, 2);
+              ctx.fillRect(3, 21, 11, 2);
+            } else {
+              // Walk animation frames
+              const frame = p.walkFrame;
+              if (frame === 0) {
+                ctx.fillRect(-8, 8, 7, 10);
+                ctx.fillRect(2, 8, 7, 10);
+                ctx.fillStyle = shoeColor;
+                ctx.fillRect(-10, 17, 9, 6);
+                ctx.fillRect(2, 17, 9, 6);
+                ctx.fillStyle = shoeSole;
+                ctx.fillRect(-10, 22, 10, 2);
+                ctx.fillRect(2, 22, 10, 2);
+              } else if (frame === 1) {
+                ctx.fillRect(-11, 7, 8, 9);
+                ctx.fillRect(3, 8, 7, 10);
+                ctx.fillStyle = shoeColor;
+                ctx.fillRect(-13, 15, 10, 6);
+                ctx.fillRect(3, 17, 9, 6);
+                ctx.fillStyle = shoeSole;
+                ctx.fillRect(-13, 20, 11, 2);
+                ctx.fillRect(3, 22, 10, 2);
+              } else {
+                ctx.fillRect(-7, 8, 7, 10);
+                ctx.fillRect(4, 7, 8, 9);
+                ctx.fillStyle = shoeColor;
+                ctx.fillRect(-9, 17, 9, 6);
+                ctx.fillRect(4, 15, 10, 6);
+                ctx.fillStyle = shoeSole;
+                ctx.fillRect(-9, 22, 10, 2);
+                ctx.fillRect(4, 20, 11, 2);
+              }
+            }
+          } else {
+            // ============================================
+            // --- REGULAR MARIO (SMALL, CRISP DETAIL) ---
+            // ============================================
+
+            // 1. CAP & VISOR
+            ctx.fillStyle = redDark;
+            ctx.fillRect(-8, -15, 16, 6);
+            ctx.fillStyle = redMain;
+            ctx.fillRect(-7, -14, 14, 5);
+            ctx.fillStyle = redLight;
+            ctx.fillRect(-6, -14, 10, 2); // Cap shine
+            // Visor with rim shadow
+            ctx.fillStyle = redMain;
+            ctx.fillRect(2, -12, 9, 4);
+            ctx.fillStyle = redDark;
+            ctx.fillRect(2, -9, 8, 1);
+
+            // 2. HAIR & SIDEBURN
+            ctx.fillStyle = hairDark;
+            ctx.fillRect(-9, -11, 5, 6);
+            ctx.fillStyle = hairColor;
+            ctx.fillRect(-8, -10, 4, 4);
+
+            // 3. FACE & NOSE
+            ctx.fillStyle = skinMain;
+            ctx.fillRect(-4, -11, 12, 7);
+            ctx.fillStyle = skinLight;
+            ctx.fillRect(-3, -10, 8, 3);
+            // Eye & glint
+            ctx.fillStyle = '#002878';
+            ctx.fillRect(2, -10, 2, 3);
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(3, -10, 1, 3);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(2, -10, 1, 1);
+            // Round Nose with shine
+            ctx.fillStyle = skinMain;
+            ctx.fillRect(6, -10, 5, 4);
+            ctx.fillStyle = skinLight;
+            ctx.fillRect(7, -9, 2, 2);
+            ctx.fillStyle = skinDark;
+            ctx.fillRect(7, -6, 4, 1);
+
+            // Bushy Mustache
+            ctx.fillStyle = hairDark;
+            ctx.fillRect(2, -7, 7, 3);
+            ctx.fillRect(4, -5, 5, 2);
+
+            // 4. SHIRT & GLOVES
+            ctx.fillStyle = redDark;
+            ctx.fillRect(-7, -4, 14, 8);
+            ctx.fillStyle = redMain;
+            ctx.fillRect(-6, -3, 12, 6);
+            // White gloves
+            ctx.fillStyle = '#f0f0f0';
+            ctx.fillRect(-9, 0, 4, 4);
+            ctx.fillRect(6, 0, 4, 4);
+            ctx.fillStyle = '#c0c0c0';
+            ctx.fillRect(-9, 3, 4, 1);
+            ctx.fillRect(6, 3, 4, 1);
+
+            // 5. OVERALLS & BRASS BUTTONS
+            ctx.fillStyle = blueDark;
+            ctx.fillRect(-6, -1, 12, 9);
+            ctx.fillStyle = blueMain;
+            ctx.fillRect(-5, 0, 10, 7);
+            // Suspenders
+            ctx.fillStyle = blueDark;
+            ctx.fillRect(-5, -4, 3, 4);
+            ctx.fillRect(2, -4, 3, 4);
+            // Golden Buttons
+            ctx.fillStyle = buttonGold;
+            ctx.fillRect(-4, -1, 2, 2);
+            ctx.fillRect(2, -1, 2, 2);
+
+            // 6. SHOES & LEGS
+            ctx.fillStyle = shoeColor;
+            if (!p.isGrounded) {
+              ctx.fillRect(-10, 7, 8, 5);
+              ctx.fillRect(2, 5, 8, 5);
+              ctx.fillStyle = shoeSole;
+              ctx.fillRect(-10, 11, 9, 2);
+              ctx.fillRect(2, 9, 9, 2);
+            } else if (p.skidding) {
+              ctx.fillRect(-11, 7, 9, 5);
+              ctx.fillRect(2, 7, 9, 5);
+              ctx.fillStyle = shoeSole;
+              ctx.fillRect(-11, 11, 10, 2);
+              ctx.fillRect(2, 11, 10, 2);
+            } else {
+              const frame = p.walkFrame;
+              if (frame === 0) {
+                ctx.fillRect(-9, 8, 7, 5);
+                ctx.fillRect(2, 8, 7, 5);
+                ctx.fillStyle = shoeSole;
+                ctx.fillRect(-9, 12, 8, 2);
+                ctx.fillRect(2, 12, 8, 2);
+              } else if (frame === 1) {
+                ctx.fillRect(-11, 6, 8, 5);
+                ctx.fillRect(2, 8, 7, 5);
+                ctx.fillStyle = shoeSole;
+                ctx.fillRect(-11, 10, 9, 2);
+                ctx.fillRect(2, 12, 8, 2);
+              } else {
+                ctx.fillRect(-8, 8, 7, 5);
+                ctx.fillRect(3, 6, 8, 5);
+                ctx.fillStyle = shoeSole;
+                ctx.fillRect(-8, 12, 8, 2);
+                ctx.fillRect(3, 10, 9, 2);
+              }
+            }
+          }
+
+          ctx.restore();
+        }
+
+        function drawGoomba(g, camX) {
+          const screenX = Math.round(g.x - camX);
+          const screenY = Math.round(g.y);
+
+          if (screenX + g.w < -20 || screenX > VIEW_WIDTH + 20) return;
+
+          ctx.save();
+          ctx.translate(screenX, screenY);
+
+          if (!g.alive) {
+            // High-detail squashed Goomba
+            ctx.fillStyle = '#6b300a';
+            ctx.beginPath();
+            ctx.ellipse(g.w / 2, g.h - 3, g.w / 2, 6, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#a85010';
+            ctx.beginPath();
+            ctx.ellipse(g.w / 2, g.h - 4, g.w / 2 - 2, 4, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Crossed dizzy X eyes
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(5, g.h - 7, 4, 2);
+            ctx.fillRect(15, g.h - 7, 4, 2);
+            ctx.fillRect(6, g.h - 8, 2, 4);
+            ctx.fillRect(16, g.h - 8, 2, 4);
+            ctx.restore();
+            return;
+          }
+
+          // 1. Mushroom Cap Shadow & Outer Silhouette
+          ctx.fillStyle = '#642908';
+          ctx.beginPath();
+          ctx.ellipse(g.w / 2, 12, g.w / 2, 12, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 2. Cap Base Color
+          ctx.fillStyle = '#b85418';
+          ctx.beginPath();
+          ctx.ellipse(g.w / 2, 11, g.w / 2 - 1, 10, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 3. Cap Top Specular Highlight
+          ctx.fillStyle = '#e88438';
+          ctx.beginPath();
+          ctx.ellipse(g.w / 2 - 2, 7, g.w / 3, 5, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 4. Stem / Stalk Body with warm gradient shading
+          ctx.fillStyle = '#cca870';
+          ctx.fillRect(g.w / 2 - 7, 13, 14, 9);
+          ctx.fillStyle = '#fce4a0';
+          ctx.fillRect(g.w / 2 - 6, 13, 12, 7);
+
+          // 5. Angry Brows & Eyes
+          ctx.fillStyle = '#000000';
+          // Sharp downward angled brows
+          ctx.beginPath();
+          ctx.moveTo(3, 5); ctx.lineTo(10, 8); ctx.lineTo(10, 10); ctx.lineTo(3, 7); ctx.closePath(); ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(21, 5); ctx.lineTo(14, 8); ctx.lineTo(14, 10); ctx.lineTo(21, 7); ctx.closePath(); ctx.fill();
+
+          // Sclera
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(5, 7, 5, 8);
+          ctx.fillRect(15, 7, 5, 8);
+
+          // Dark vertical pupils with glints
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(7, 8, 3, 6);
+          ctx.fillRect(15, 8, 3, 6);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(7, 9, 1, 2);
+          ctx.fillRect(15, 9, 1, 2);
+
+          // Fangs on lower jaw
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.moveTo(7, 21); ctx.lineTo(9, 17); ctx.lineTo(11, 21); ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(13, 21); ctx.lineTo(15, 17); ctx.lineTo(17, 21); ctx.fill();
+
+          // 6. Walking Wobbly Feet with leather shine
+          const step = Math.sin(g.animTimer) > 0;
+          ctx.fillStyle = '#220d00'; // Sole
+          ctx.fillRect(step ? 1 : 2, 26, 10, 2);
+          ctx.fillRect(step ? 17 : 16, 26, 9, 2);
+
+          ctx.fillStyle = '#4a2006';
+          if (step) {
+            ctx.fillRect(1, 21, 10, 6);
+            ctx.fillRect(17, 22, 9, 5);
+            ctx.fillStyle = '#7a3e14';
+            ctx.fillRect(2, 21, 4, 2);
+          } else {
+            ctx.fillRect(2, 22, 9, 5);
+            ctx.fillRect(16, 21, 10, 6);
+            ctx.fillStyle = '#7a3e14';
+            ctx.fillRect(17, 21, 4, 2);
+          }
+
+          ctx.restore();
+        }
+
+        function drawKoopa(k, camX) {
+          const screenX = Math.round(k.x - camX);
+          const screenY = Math.round(k.y);
+
+          if (screenX + k.w < -20 || screenX > VIEW_WIDTH + 20) return;
+
+          ctx.save();
+          ctx.translate(screenX, screenY);
+
+          const shellMainColor = k.isBlue ? '#0088cc' : '#00b020';
+          const shellPatternColor = k.isBlue ? '#003366' : '#004d10';
+          const shellHighlight = k.isBlue ? '#40c8ff' : '#45e850';
+
+          if (k.inShell) {
+            // Shell mode with 3D spherical shading and spin blur
+            ctx.save();
+            if (k.sliding) {
+              const wobble = Math.sin(Date.now() / 30) * 2;
+              ctx.translate(0, wobble);
+            }
+
+            // Shell shadow outline
+            ctx.fillStyle = shellPatternColor;
+            ctx.beginPath();
+            ctx.ellipse(k.w / 2, k.h / 2, k.w / 2, k.h / 2, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Shell dome
+            ctx.fillStyle = shellMainColor;
+            ctx.beginPath();
+            ctx.ellipse(k.w / 2, k.h / 2 - 1, k.w / 2 - 2, k.h / 2 - 2, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Top specular shine
+            ctx.fillStyle = shellHighlight;
+            ctx.beginPath();
+            ctx.ellipse(k.w / 2 - 2, k.h / 2 - 5, 5, 3, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Hexagonal shell plates
+            ctx.strokeStyle = shellPatternColor;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(6, 6, k.w - 12, k.h - 12);
+
+            // Heavy white rim plate
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(2, k.h - 7, k.w - 4, 5);
+            ctx.fillStyle = '#b0b0b0';
+            ctx.fillRect(2, k.h - 2, k.w - 4, 1); // rim shadow
+
+            ctx.restore();
+            ctx.restore();
+            return;
+          }
+
+          // Full Walking Koopa Troopa
+          const facing = k.vx >= 0 ? 1 : -1;
+          ctx.translate(k.w / 2, 0);
+          ctx.scale(facing, 1);
+          ctx.translate(-k.w / 2, 0);
+
+          // 1. SHELL ON BACK (shaded dome with white rim)
+          ctx.fillStyle = shellPatternColor;
+          ctx.beginPath();
+          ctx.arc(8, 19, 12, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = shellMainColor;
+          ctx.beginPath();
+          ctx.arc(8, 18, 10, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = shellHighlight;
+          ctx.beginPath();
+          ctx.arc(6, 15, 4, 0, Math.PI * 2);
+          ctx.fill();
+
+          // White scalloped rim
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 24, 16, 5);
+          ctx.fillStyle = '#a0a0a0';
+          ctx.fillRect(0, 28, 16, 1);
+
+          // 2. YELLOW HEAD & PROMINENT BEAK
+          ctx.fillStyle = '#d48800'; // head shadow
+          ctx.beginPath();
+          ctx.ellipse(18, 12, 9, 9, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#ffcc00'; // yellow head
+          ctx.beginPath();
+          ctx.ellipse(18, 11, 8, 8, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Beak nose profile
+          ctx.fillStyle = '#ffe066';
+          ctx.fillRect(21, 10, 4, 4);
+
+          // Cartoon Eye with glint
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(16, 6, 6, 8);
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(18, 7, 3, 5);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(18, 7, 1, 2);
+
+          // 3. ORANGE WEBBED SHOES WITH SOLE
+          const step = Math.sin(k.animTimer) > 0;
+          ctx.fillStyle = '#c05000'; // shoe shadow
+          ctx.fillRect(2, 33, 10, 2);
+          ctx.fillRect(12, 33, 10, 2);
+
+          ctx.fillStyle = '#ff8800'; // shoe top
+          if (step) {
+            ctx.fillRect(2, 27, 9, 6);
+            ctx.fillRect(13, 26, 8, 7);
+            ctx.fillStyle = '#ffa533';
+            ctx.fillRect(3, 27, 4, 2);
+          } else {
+            ctx.fillRect(3, 26, 8, 7);
+            ctx.fillRect(12, 27, 9, 6);
+            ctx.fillStyle = '#ffa533';
+            ctx.fillRect(13, 27, 4, 2);
+          }
+
+          ctx.restore();
+        }
+
+        function drawBowser(b, camX) {
+          if (!b) return;
+          const screenX = Math.round(b.x - camX);
+          const screenY = Math.round(b.y);
+
+          if (screenX + b.w < -60 || screenX > VIEW_WIDTH + 60) return;
+
+          ctx.save();
+          ctx.translate(screenX + b.w / 2, screenY + b.h / 2);
+
+          if (b.defeated) {
+            ctx.rotate(Math.PI); // Flipped upside down!
+          }
+
+          // 1. MASSIVE SPIKY CARAPACE SHELL (textured with 3D shaded plates)
+          ctx.fillStyle = '#0d4a13';
+          ctx.beginPath();
+          ctx.arc(4, 0, 26, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#1c8c24';
+          ctx.beginPath();
+          ctx.arc(4, -1, 23, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#3ee04c';
+          ctx.beginPath();
+          ctx.arc(2, -4, 10, 0, Math.PI * 2);
+          ctx.fill();
+
+          // White spikes with blood-orange warning rings
+          ctx.fillStyle = '#d01010';
+          ctx.fillRect(10, -26, 8, 5);
+          ctx.fillRect(-16, -24, 8, 5);
+          ctx.fillRect(-22, 0, 6, 6);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.moveTo(8, -24); ctx.lineTo(14, -38); ctx.lineTo(20, -22); ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(-10, -20); ctx.lineTo(-18, -34); ctx.lineTo(-4, -20); ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(-20, 2); ctx.lineTo(-36, -2); ctx.lineTo(-20, 14); ctx.fill();
+
+          // 2. SCALY YELLOW BODY & UNDERBELLY WITH RIBS
+          ctx.fillStyle = '#b87800';
+          ctx.beginPath();
+          ctx.ellipse(-10, 4, 16, 19, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#ffb800';
+          ctx.beginPath();
+          ctx.ellipse(-10, 4, 14, 17, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Belly plate ribs
+          ctx.fillStyle = '#d48800';
+          ctx.fillRect(-22, -3, 18, 3);
+          ctx.fillRect(-22, 5, 18, 3);
+          ctx.fillRect(-20, 13, 14, 2);
+
+          // 3. RED FLAMING MANE & HAIR TUFTS
+          ctx.fillStyle = '#990000';
+          ctx.fillRect(-26, -30, 17, 15);
+          ctx.fillStyle = '#ff2200';
+          ctx.fillRect(-24, -28, 14, 12);
+          ctx.fillStyle = '#ff7700';
+          ctx.fillRect(-22, -26, 8, 6); // hair shine
+
+          // 4. DRAGON HEAD, SNOUT & HORNS
+          ctx.fillStyle = '#146419';
+          ctx.beginPath();
+          ctx.ellipse(-20, -14, 13, 11, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#229e2c';
+          ctx.beginPath();
+          ctx.ellipse(-20, -14, 11, 9, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Snout
+          ctx.fillStyle = '#ffb800';
+          ctx.fillRect(-29, -15, 15, 9);
+          ctx.fillStyle = '#ffa000';
+          ctx.fillRect(-29, -6, 15, 2);
+
+          // Curved Horns with ivory shine
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.moveTo(-15, -24); ctx.lineTo(-10, -40); ctx.lineTo(-5, -24); ctx.fill();
+          ctx.fillStyle = '#cccccc';
+          ctx.beginPath();
+          ctx.moveTo(-10, -40); ctx.lineTo(-5, -24); ctx.lineTo(-8, -24); ctx.fill();
+
+          // Piercing glowing yellow eyes with red irises
+          ctx.fillStyle = '#ff0000';
+          ctx.fillRect(-23, -19, 7, 6);
+          ctx.fillStyle = '#ffff00';
+          ctx.fillRect(-22, -18, 5, 4);
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(-24, -17, 2, 3);
+
+          // Menacing Fangs
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.moveTo(-28, -10); ctx.lineTo(-26, -4); ctx.lineTo(-24, -10); ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(-22, -10); ctx.lineTo(-20, -4); ctx.lineTo(-18, -10); ctx.fill();
+
+          // 5. HEAVY CLAWS & DRAGON FEET
+          const footStep = Math.sin(b.animTimer) > 0;
+          ctx.fillStyle = '#146419';
+          ctx.fillRect(-19, 17 + (footStep ? -2 : 0), 14, 12);
+          ctx.fillRect(3, 17 + (footStep ? 0 : -2), 14, 12);
+
+          ctx.fillStyle = '#229e2c';
+          ctx.fillRect(-18, 18 + (footStep ? -2 : 0), 12, 10);
+          ctx.fillRect(4, 18 + (footStep ? 0 : -2), 12, 10);
+
+          // Sharp white razor claws
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(-21, 24, 3, 5);
+          ctx.fillRect(-17, 24, 3, 5);
+          ctx.fillRect(1, 24, 3, 5);
+          ctx.fillRect(5, 24, 3, 5);
+
+          // Breathing Fire Glow effect in throat
+          if (b.fireTimer < 0.45) {
+            const glowR = 10 + Math.random() * 6;
+            ctx.fillStyle = '#ff4400';
+            ctx.beginPath();
+            ctx.arc(-33, -10, glowR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ffff33';
+            ctx.beginPath();
+            ctx.arc(-33, -10, glowR * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          ctx.restore();
+        }
+
+        function drawBossFireball(fb, camX) {
+          const screenX = Math.round(fb.x - camX);
+          const screenY = Math.round(fb.y);
+
+          if (screenX < -40 || screenX > VIEW_WIDTH + 40) return;
+
+          ctx.save();
+          ctx.translate(screenX, screenY);
+
+          // Flaming spinning breath
+          const rot = fb.animTimer;
+          ctx.translate(fb.w / 2, fb.h / 2);
+          ctx.rotate(rot);
+
+          // Outer flame
+          ctx.fillStyle = '#ff2200';
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 14, 9, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Flame lobes
+          ctx.fillStyle = '#ff8800';
+          ctx.fillRect(-10, -6, 20, 12);
+
+          // Hot yellow core
+          ctx.fillStyle = '#ffff55';
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 8, 5, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // White center
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(-3, -2, 6, 4);
+
+          ctx.restore();
+        }
+
+        function drawMushroomItem(m, camX) {
+          const screenX = Math.round(m.x - camX);
+          const screenY = Math.round(m.y);
+
+          ctx.save();
+          ctx.translate(screenX, screenY);
+
+          // Red dome cap
+          ctx.fillStyle = '#e52521';
+          ctx.beginPath();
+          ctx.arc(12, 12, 12, Math.PI, 0);
+          ctx.fill();
+
+          // White polka dots
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(12, 6, 4, 0, Math.PI * 2);
+          ctx.arc(4, 11, 3, 0, Math.PI * 2);
+          ctx.arc(20, 11, 3, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Stem
+          ctx.fillStyle = '#fce4a0';
+          ctx.fillRect(5, 12, 14, 11);
+
+          // Eyes
+          ctx.fillStyle = '#000';
+          ctx.fillRect(7, 14, 2, 4);
+          ctx.fillRect(15, 14, 2, 4);
+
+          ctx.restore();
+        }
+
+        function drawCoin(c, camX) {
+          const screenX = Math.round(c.x - camX);
+          const screenY = Math.round(c.y);
+
+          if (screenX < -20 || screenX > VIEW_WIDTH + 20) return;
+
+          // 3D spinning coin effect
+          const scale = Math.abs(Math.sin(c.animTimer));
+          const w = Math.max(3, 14 * scale);
+
+          ctx.save();
+          ctx.translate(screenX + 10, screenY + 12);
+
+          ctx.fillStyle = '#b8860b';
+          ctx.beginPath();
+          ctx.ellipse(0, 0, w / 2 + 1, 11, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#ffd700';
+          ctx.beginPath();
+          ctx.ellipse(0, 0, w / 2, 10, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Center shine bar
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(-w / 4, -6, Math.max(1, w / 2), 12);
+
+          ctx.restore();
+        }
+
+        function drawFlagpoleAndCastle(camX) {
+          // --- FLAGPOLE ---
+          const poleX = Math.round(flagpole.x - camX);
+          if (poleX >= -60 && poleX <= VIEW_WIDTH + 60) {
+            // Pole steps
+            ctx.fillStyle = '#8b5a2b';
+            ctx.fillRect(poleX - 16, flagpole.baseY, 32, 32);
+            ctx.strokeStyle = '#401800';
+            ctx.strokeRect(poleX - 16, flagpole.baseY, 32, 32);
+
+            // Pole rod
+            ctx.fillStyle = '#dcdcdc';
+            ctx.fillRect(poleX - 3, flagpole.topY, 6, flagpole.baseY - flagpole.topY);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(poleX - 2, flagpole.topY, 2, flagpole.baseY - flagpole.topY);
+
+            // Golden Finial Ball at top
+            ctx.fillStyle = '#ffd700';
+            ctx.beginPath();
+            ctx.arc(poleX, flagpole.topY, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#b8860b';
+            ctx.stroke();
+
+            // Flag
+            const flagY = Math.round(flagpole.flagY);
+            ctx.fillStyle = '#00a800';
+            ctx.beginPath();
+            ctx.moveTo(poleX - 3, flagY);
+            ctx.lineTo(poleX - 35, flagY + 14);
+            ctx.lineTo(poleX - 3, flagY + 28);
+            ctx.fill();
+            ctx.fillStyle = '#80d010';
+            ctx.fillRect(poleX - 18, flagY + 8, 8, 12);
+          }
+
+          // --- VICTORY CASTLE ---
+          const castleX = Math.round(castle.x - camX);
+          if (castleX >= -200 && castleX <= VIEW_WIDTH + 200) {
+            // Main castle brick wall
+            ctx.fillStyle = '#b85418';
+            ctx.fillRect(castleX, castle.y, castle.w, castle.h);
+
+            // Brick lines
+            ctx.fillStyle = '#602000';
+            for (let cy = castle.y; cy < castle.y + castle.h; cy += 16) {
+              ctx.fillRect(castleX, cy, castle.w, 2);
+            }
+
+            // Battlements / Crenellations
+            for (let bx = castleX; bx < castleX + castle.w; bx += 32) {
+              ctx.fillRect(bx, castle.y - 18, 20, 18);
+              ctx.fillStyle = '#fce4a0';
+              ctx.fillRect(bx + 2, castle.y - 16, 16, 3);
+              ctx.fillStyle = '#602000';
+            }
+
+            // Entrance Door Archway
+            ctx.fillStyle = '#000000';
+            ctx.beginPath();
+            ctx.arc(castleX + castle.w / 2, castle.y + castle.h - castle.doorH, castle.doorW / 2, Math.PI, 0);
+            ctx.rect(castleX + castle.w / 2 - castle.doorW / 2, castle.y + castle.h - castle.doorH, castle.doorW, castle.doorH);
+            ctx.fill();
+
+            // Castle Flag
+            const cfX = castleX + castle.w / 2;
+            const cfY = castle.flagRaised ? castle.y - 45 : castle.y - 20;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(cfX - 1, cfY, 3, 25);
+            ctx.fillStyle = '#e52521';
+            ctx.fillRect(cfX + 2, cfY, 18, 12);
+          }
+        }
+
+        function drawHUD() {
+          ctx.save();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 15px "Courier New", Courier, monospace';
+          ctx.shadowColor = '#000';
+          ctx.shadowBlur = 4;
+          ctx.shadowOffsetX = 2;
+          ctx.shadowOffsetY = 2;
+
+          // MARIO & Score
+          ctx.fillText('MARIO', 40, 24);
+          ctx.fillText(score.toString().padStart(6, '0'), 40, 42);
+
+          // Coins
+          ctx.fillStyle = '#ffd700';
+          ctx.beginPath();
+          ctx.arc(225, 36, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(`× ${coins.toString().padStart(2, '0')}`, 238, 42);
+
+          // WORLD
+          ctx.fillText('WORLD', 400, 24);
+          const stageInfo = STAGE_NAMES[currentStage] || { num: '1-1', title: 'OVERWORLD' };
+          ctx.fillText(stageInfo.num, 412, 42);
+
+          // TIME
+          ctx.fillText('TIME', 570, 24);
+          const displayTime = Math.max(0, Math.floor(levelTime));
+          ctx.fillText(displayTime.toString().padStart(3, '0'), 578, 42);
+
+          // LIVES
+          ctx.fillText('LIVES', 700, 24);
+          ctx.fillText(`♥ × ${lives}`, 700, 42);
+
+          ctx.restore();
+        }
+
+        function drawOverlays() {
+          if (currentState === GameState.STAGE_CARD) {
+            // Authentic Black Interstitial Stage Card
+            ctx.fillStyle = '#0a0d16';
+            ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+
+            const stageInfo = STAGE_NAMES[currentStage] || { num: '1-1', title: 'STAGE' };
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 32px "Courier New", Courier, monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(`WORLD ${stageInfo.num}`, VIEW_WIDTH / 2, 180);
+
+            ctx.fillStyle = '#fc9838';
+            ctx.font = 'bold 20px "Courier New", Courier, monospace';
+            ctx.fillText(stageInfo.title, VIEW_WIDTH / 2, 222);
+
+            // Mario head and lives counter
+            ctx.fillStyle = '#e52521';
+            ctx.fillRect(VIEW_WIDTH / 2 - 38, 264, 16, 16);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 24px "Courier New", Courier, monospace';
+            ctx.fillText(`×  ${lives}`, VIEW_WIDTH / 2 + 16, 278);
+
+            // Helpful tips
+            ctx.fillStyle = '#8898b8';
+            ctx.font = '14px "Courier New", Courier, monospace';
+            if (currentStage === 1) {
+              ctx.fillText('Tip: Double-tap Space for Super Double Jump! Hold Space for High Jump.', VIEW_WIDTH / 2, 360);
+            } else if (currentStage === 2) {
+              ctx.fillText('Tip: Watch out for underground Koopas! Kick their shells to wipe out lines of enemies.', VIEW_WIDTH / 2, 360);
+            } else if (currentStage === 3) {
+              ctx.fillText("Tip: Leap across the lava moat, dodge Bowser's flames, and touch the Axe switch!", VIEW_WIDTH / 2, 360);
+            }
+            return;
+          }
+
+          if (currentState === GameState.START) {
+            // Dark vignette
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+            ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+
+            // Title Banner Box
+            ctx.fillStyle = 'rgba(15, 20, 35, 0.92)';
+            ctx.strokeStyle = '#fc9838';
+            ctx.lineWidth = 4;
+            roundRect(ctx, 100, 70, 600, 340, 16, true, true);
+
+            // Game Title
+            ctx.fillStyle = '#fc9838';
+            ctx.font = 'bold 36px "Courier New", Courier, monospace';
+            ctx.textAlign = 'center';
+            ctx.shadowColor = '#000';
+            ctx.shadowBlur = 8;
+            ctx.shadowOffsetY = 4;
+            ctx.fillText('SUPER RETRO', VIEW_WIDTH / 2, 130);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 28px "Courier New", Courier, monospace';
+            ctx.fillText('PLATFORMER BROS', VIEW_WIDTH / 2, 172);
+
+            // Start Prompt (Pulsing)
+            const pulse = Math.floor(Date.now() / 400) % 2 === 0;
+            ctx.fillStyle = pulse ? '#ffea00' : '#ffffff';
+            ctx.font = 'bold 20px "Courier New", Courier, monospace';
+            ctx.fillText('PRESS SPACE OR CLICK TO PLAY', VIEW_WIDTH / 2, 230);
+
+            // Controls Guide
+            ctx.fillStyle = '#a0b0d0';
+            ctx.font = '14px "Courier New", Courier, monospace';
+            ctx.fillText('🎮 CONTROLS:', VIEW_WIDTH / 2, 275);
+            ctx.fillText('A / D  or  ARROWS : Move Left / Right', VIEW_WIDTH / 2, 298);
+            ctx.fillText('SPACE / W : High Jump (Hold Space for Max Height | Double Tap: Super Double Jump!)', VIEW_WIDTH / 2, 321);
+            ctx.fillText('SHIFT / B : Run Sprint  |  P : Pause', VIEW_WIDTH / 2, 344);
+
+            if (highScore > 0) {
+              ctx.fillStyle = '#ffd700';
+              ctx.font = 'bold 15px "Courier New", Courier, monospace';
+              ctx.fillText(`🏆 TOP RECORD: ${highScore.toString().padStart(6, '0')}`, VIEW_WIDTH / 2, 390);
+            }
+          } else if (currentState === GameState.PAUSED) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 36px "Courier New", Courier, monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('GAME PAUSED', VIEW_WIDTH / 2, 220);
+
+            ctx.font = '18px "Courier New", Courier, monospace';
+            ctx.fillText('PRESS P OR ESC TO RESUME', VIEW_WIDTH / 2, 270);
+          } else if (currentState === GameState.GAMEOVER) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+            ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+
+            ctx.fillStyle = '#e52521';
+            ctx.font = 'bold 44px "Courier New", Courier, monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('GAME OVER', VIEW_WIDTH / 2, 190);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '22px "Courier New", Courier, monospace';
+            ctx.fillText(`FINAL SCORE: ${score.toString().padStart(6, '0')}`, VIEW_WIDTH / 2, 250);
+
+            if (score > highScore) {
+              highScore = score;
+              localStorage.setItem('retro_mario_highscore', highScore.toString());
+              ctx.fillStyle = '#ffd700';
+              ctx.fillText('⭐ NEW RECORD HIGH SCORE! ⭐', VIEW_WIDTH / 2, 290);
+            }
+
+            const pulse = Math.floor(Date.now() / 400) % 2 === 0;
+            ctx.fillStyle = pulse ? '#ffea00' : '#ffffff';
+            ctx.font = 'bold 18px "Courier New", Courier, monospace';
+            ctx.fillText('PRESS SPACE OR CLICK TO TRY AGAIN', VIEW_WIDTH / 2, 340);
+          } else if (currentState === GameState.VICTORY) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+            ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+
+            // Victory banner
+            ctx.fillStyle = 'rgba(20, 24, 38, 0.9)';
+            ctx.strokeStyle = '#48c080';
+            ctx.lineWidth = 4;
+            roundRect(ctx, 120, 90, 560, 300, 16, true, true);
+
+            ctx.fillStyle = '#ffd700';
+            ctx.font = 'bold 36px "Courier New", Courier, monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('STAGE CLEAR!', VIEW_WIDTH / 2, 155);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '20px "Courier New", Courier, monospace';
+            ctx.fillText('THANK YOU FOR PLAYING!', VIEW_WIDTH / 2, 205);
+            ctx.fillText(`TOTAL SCORE: ${score.toString().padStart(6, '0')}`, VIEW_WIDTH / 2, 245);
+            ctx.fillText(`COINS COLLECTED: ${coins}`, VIEW_WIDTH / 2, 280);
+
+            if (score > highScore) {
+              highScore = score;
+              localStorage.setItem('retro_mario_highscore', highScore.toString());
+              ctx.fillStyle = '#ffd700';
+              ctx.fillText('⭐ NEW ALL-TIME RECORD! ⭐', VIEW_WIDTH / 2, 315);
+            }
+
+            const pulse = Math.floor(Date.now() / 400) % 2 === 0;
+            ctx.fillStyle = pulse ? '#ffea00' : '#ffffff';
+            ctx.font = 'bold 18px "Courier New", Courier, monospace';
+            ctx.fillText('PRESS SPACE OR CLICK TO PLAY AGAIN', VIEW_WIDTH / 2, 355);
+          }
+        }
+
+        function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
+          ctx.beginPath();
+          ctx.moveTo(x + radius, y);
+          ctx.lineTo(x + width - radius, y);
+          ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+          ctx.lineTo(x + width, y + height - radius);
+          ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+          ctx.lineTo(x + radius, y + height);
+          ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+          ctx.lineTo(x, y + radius);
+          ctx.quadraticCurveTo(x, y, x + radius, y);
+          ctx.closePath();
+          if (fill) ctx.fill();
+          if (stroke) ctx.stroke();
+        }
+
+        // --- AXE SWITCH & VICTORY SEQUENCE LOGIC ---
+        function triggerAxeSwitch() {
+          if (!axeBlock) return;
+          Sound.breakBrick();
+          score += 2000;
+          addFloatingText(axeBlock.x, axeBlock.y - 24, 'AXE CUT! 2000', '#ffd700');
+
+          // Remove axe block
+          const axeIdx = blocks.indexOf(axeBlock);
+          if (axeIdx !== -1) blocks.splice(axeIdx, 1);
+          axeBlock = null;
+
+          // Collapse the drawbridge blocks sequentially with brick particles
+          const bridgeBlocks = blocks.filter(b => b.type === BlockType.BRIDGE);
+          bridgeBlocks.forEach((bridgeBlock, i) => {
+            setTimeout(() => {
+              createBrickDebris(bridgeBlock.x + 16, bridgeBlock.y + 16);
+              bridgeBlock.solid = false;
+              bridgeBlock.y += 1000;
+              Sound.bump();
+            }, i * 65);
+          });
+
+          // Bowser plunges into the lava moat!
+          if (bowser && !bowser.defeated) {
+            setTimeout(() => {
+              if (bowser) bowser.defeat();
+            }, 300);
+          }
+        }
+
+        function triggerVictory() {
+          currentState = GameState.VICTORY_SLIDE;
+          flagpole.reached = true;
+          player.vx = 0;
+          player.vy = 0;
+          player.x = flagpole.x - player.w / 2;
+          Sound.victory();
+          score += 1000;
+          addFloatingText(flagpole.x, player.y, '1000', '#ffff00');
+        }
+
+        function updateVictory(dt) {
+          if (currentState === GameState.VICTORY_SLIDE) {
+            // Slide down pole
+            if (flagpole.flagY < flagpole.baseY - 32) {
+              flagpole.flagY += 150 * dt;
+            }
+            if (player.y < flagpole.baseY - player.h) {
+              player.y += 140 * dt;
+            } else {
+              // Reached bottom of pole
+              player.y = flagpole.baseY - player.h;
+              player.x = flagpole.x + 16;
+              currentState = GameState.VICTORY_WALK;
+            }
+          } else if (currentState === GameState.VICTORY_WALK) {
+            // Player walks to the castle
+            player.facing = 1;
+            player.x += 100 * dt;
+            player.animTimer += dt * 10;
+            player.walkFrame = Math.floor(player.animTimer) % 3;
+
+            // Arrive at castle door
+            if (player.x >= castle.x + castle.w / 2 - 8) {
+              castle.flagRaised = true;
+              // Calculate Time Bonus
+              if (!victoryBonusCalculated) {
+                victoryBonusCalculated = true;
+                const timeBonus = Math.floor(levelTime) * 50;
+                score += timeBonus;
+                addFloatingText(castle.x + castle.w / 2, castle.y - 10, `+${timeBonus} TIME BONUS!`, '#ffff55');
+              }
+              victoryTimer += dt;
+              // Launch fireworks
+              if (Math.random() < 0.25) {
+                createFirework(castle.x + Math.random() * castle.w, castle.y - 30 - Math.random() * 80);
+              }
+              if (victoryTimer > 2.8) {
+                if (currentStage < TOTAL_STAGES) {
+                  startStage(currentStage + 1);
+                } else {
+                  currentState = GameState.VICTORY;
+                }
+              }
+            }
+          }
+        }
+
+        function createFirework(x, y) {
+          const colors = ['#ff4444', '#ffea00', '#44ff44', '#44aaff', '#ffffff'];
+          const col = colors[Math.floor(Math.random() * colors.length)];
+          for (let i = 0; i < 16; i++) {
+            const angle = (Math.PI * 2 / 16) * i;
+            const spd = 60 + Math.random() * 80;
+            particles.push({
+              x: x,
+              y: y,
+              vx: Math.cos(angle) * spd,
+              vy: Math.sin(angle) * spd,
+              color: col,
+              alpha: 1.0,
+              update: function(dt) {
+                this.x += this.vx * dt;
+                this.y += this.vy * dt;
+                this.alpha -= 1.4 * dt;
+              }
+            });
+          }
+        }
+
+        // --- MAIN GAME LOOP ---
+        let lastTime = performance.now();
+
+        function gameLoop(now) {
+          const dt = Math.min((now - lastTime) / 1000, 0.05); // Cap to 50ms to prevent collision tunneling
+          lastTime = now;
+
+          // 1. UPDATE STATE
+          if (currentState === GameState.STAGE_CARD) {
+            stageCardTimer -= dt;
+            if (stageCardTimer <= 0) {
+              currentState = GameState.PLAYING;
+            }
+          } else if (currentState === GameState.PLAYING) {
+            // Level Timer
+            timeTimer += dt;
+            if (timeTimer >= 0.4) {
+              timeTimer = 0;
+              levelTime -= 1;
+              if (levelTime <= 0) {
+                player.die();
+              }
+            }
+
+            // Update Player
+            player.update(dt);
+
+            // Update Camera (Smooth tracking forward)
+            const targetCamX = player.x - 240;
+            if (targetCamX > cameraX) {
+              cameraX = targetCamX;
+            }
+            // Clamp camera to level bounds
+            cameraX = Math.max(0, Math.min(LEVEL_WIDTH - VIEW_WIDTH, cameraX));
+
+            // Check Flagpole collision
+            if (!flagpole.reached && player.x + player.w >= flagpole.x - 6 && player.x <= flagpole.x + 10) {
+              triggerVictory();
+            }
+
+            // Update Blocks
+            blocks.forEach(b => b.update(dt));
+
+            // Update Enemies & Interactions
+            enemies.forEach(e => {
+              e.update(dt);
+
+              if (e.alive && checkAABB(player, e)) {
+                if (e instanceof Koopa && e.inShell && !e.sliding) {
+                  e.stomp(player.facing);
+                  player.invincibleTimer = 0.2;
+                } else {
+                  const isFalling = player.vy > 0;
+                  const playerFeet = player.y + player.h;
+                  const enemyHead = e.y + (e instanceof Koopa && e.inShell ? 8 : 14);
+
+                  if (isFalling && playerFeet <= enemyHead + 10) {
+                    e.stomp(player.facing);
+                    // Stomp bounce (high bounce if jump button is held!)
+                    player.vy = keys.jumpHeld ? -550 : -380;
+                    player.y = e.y - player.h;
+                    player.jumpCount = 1; // Allow double jump after stomp
+                  } else {
+                    player.takeDamage();
+                  }
+                }
+              }
+            });
+
+            // Filter out dead squashed enemies after lingering
+            enemies = enemies.filter(e => e.alive || e.squashedTimer > 0);
+
+            // Update Bowser Boss
+            if (bowser) {
+              bowser.update(dt);
+              if (bowser.alive && !bowser.defeated && checkAABB(player, bowser)) {
+                const isFalling = player.vy > 0;
+                const playerFeet = player.y + player.h;
+                if (isFalling && playerFeet <= bowser.y + 24) {
+                  player.vy = -450;
+                  player.takeDamage();
+                } else {
+                  player.takeDamage();
+                }
+              }
+            }
+
+            // Update Boss Fireballs
+            bossFireballs.forEach(fb => {
+              fb.update(dt);
+              if (fb.alive && checkAABB(player, fb)) {
+                player.takeDamage();
+                fb.alive = false;
+                createDust(fb.x, fb.y);
+              }
+            });
+            bossFireballs = bossFireballs.filter(fb => fb.alive);
+
+            // Update Items (Mushrooms)
+            items.forEach(m => {
+              m.update(dt);
+              if (m.alive && checkAABB(player, m)) {
+                m.alive = false;
+                player.makeSuper();
+              }
+            });
+            items = items.filter(m => m.alive);
+
+            // Update Floating Coins
+            coinsList.forEach(c => {
+              c.update(dt);
+              if (!c.collected && checkAABB(player, c)) {
+                c.collected = true;
+                Sound.coin();
+                coins++;
+                score += 100;
+                addFloatingText(c.x + 4, c.y - 10, '100', '#ffd700');
+                // 100 coins = 1-UP!
+                if (coins >= 100) {
+                  coins = 0;
+                  lives++;
+                  Sound.powerup();
+                  addFloatingText(player.x, player.y - 20, '1-UP!', '#44ff44');
+                }
+              }
+            });
+            coinsList = coinsList.filter(c => !c.collected);
+          } else if (currentState === GameState.DYING) {
+            // Player death hop animation
+            player.dyingTimer -= dt;
+            player.vy += GRAVITY * dt * 0.9;
+            player.y += player.vy * dt;
+
+            if (player.dyingTimer <= 0) {
+              if (lives > 0) {
+                // Respawn at beginning
+                player.reset(80, GROUND_Y - 40);
+                cameraX = 0;
+                currentState = GameState.PLAYING;
+              } else {
+                currentState = GameState.GAMEOVER;
+              }
+            }
+          } else if (currentState === GameState.VICTORY_SLIDE || currentState === GameState.VICTORY_WALK) {
+            updateVictory(dt);
+          }
+
+          // Update Sky Aeroplanes & Birds
+          skyPlanes.forEach(p => p.update(dt));
+          skyBirds.forEach(b => b.update(dt));
+
+          // Update Particles & Floating Text
+          particles.forEach(p => p.update(dt));
+          particles = particles.filter(p => (p.life === undefined || p.life > 0) && (p.alpha === undefined || p.alpha > 0));
+
+          floatingTexts.forEach(t => t.update(dt));
+          floatingTexts = floatingTexts.filter(t => t.alpha > 0);
+
+          // 2. RENDER SCENE
+          ctx.clearRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+
+          // Background sky & landscape
+          drawBackground(cameraX);
+
+          // Sky Aeroplane & Birds
+          skyPlanes.forEach(plane => drawAeroplane(plane, cameraX));
+          skyBirds.forEach(bird => drawSkyBird(bird, cameraX));
+
+          // Blocks & Pipes
+          blocks.forEach(b => drawBlock(b, cameraX));
+
+          // Collectible coins
+          coinsList.forEach(c => drawCoin(c, cameraX));
+
+          // Flagpole and Victory Castle
+          drawFlagpoleAndCastle(cameraX);
+
+          // Items (Super Mushrooms)
+          items.forEach(m => drawMushroomItem(m, cameraX));
+
+          // Enemies
+          enemies.forEach(e => {
+            if (e instanceof Koopa) {
+              drawKoopa(e, cameraX);
+            } else {
+              drawGoomba(e, cameraX);
+            }
+          });
+
+          // Bowser Boss
+          if (bowser) {
+            drawBowser(bowser, cameraX);
+          }
+
+          // Boss Fireballs
+          bossFireballs.forEach(fb => drawBossFireball(fb, cameraX));
+
+          // Player
+          if (currentState !== GameState.VICTORY_WALK || player.x < castle.x + castle.w / 2) {
+            drawPlayer(player, cameraX);
+          }
+
+          // Particles
+          particles.forEach(p => {
+            ctx.save();
+            if (p instanceof BrickParticle) {
+              ctx.translate(p.x - cameraX, p.y);
+              ctx.rotate(p.rotation);
+              ctx.fillStyle = '#b84418';
+              ctx.fillRect(-6, -6, 12, 12);
+            } else if (p instanceof BounceCoin) {
+              const scale = Math.abs(Math.sin(p.animTimer));
+              ctx.globalAlpha = Math.max(0, p.alpha);
+              ctx.fillStyle = '#ffd700';
+              ctx.beginPath();
+              ctx.ellipse(p.x - cameraX, p.y, Math.max(2, 8 * scale), 12, 0, 0, Math.PI * 2);
+              ctx.fill();
+            } else if (p.r) {
+              // Dust puff
+              ctx.globalAlpha = Math.max(0, p.alpha);
+              ctx.fillStyle = '#e8d8b8';
+              ctx.beginPath();
+              ctx.arc(p.x - cameraX, p.y, p.r, 0, Math.PI * 2);
+              ctx.fill();
+            } else if (p.color) {
+              // Firework particle
+              ctx.globalAlpha = Math.max(0, p.alpha);
+              ctx.fillStyle = p.color;
+              ctx.fillRect(p.x - cameraX, p.y, 4, 4);
+            }
+            ctx.restore();
+          });
+
+          // Floating Score Texts
+          floatingTexts.forEach(t => {
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, t.alpha);
+            ctx.fillStyle = t.color;
+            ctx.font = 'bold 14px "Courier New", Courier, monospace';
+            ctx.shadowColor = '#000';
+            ctx.shadowBlur = 4;
+            ctx.shadowOffsetX = 1;
+            ctx.shadowOffsetY = 1;
+            ctx.fillText(t.text, Math.round(t.x - cameraX), Math.round(t.y));
+            ctx.restore();
+          });
+
+          // Retro HUD Header
+          drawHUD();
+
+          // UI Overlays (Start, Pause, Game Over, Stage Clear)
+          drawOverlays();
+
+          requestAnimationFrame(gameLoop);
+        }
+
+        // Start 60 FPS animation loop
+        requestAnimationFrame(gameLoop);
+
+      })();
+    </script>
+  </body>
+</html>

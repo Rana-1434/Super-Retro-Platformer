@@ -2380,94 +2380,136 @@
           const blueDark = '#001e66';
           const blueLight = '#3366cc';
 
-          const skinMain = '#ffcca4';
-          const skinDark = '#e5a578';
-          const skinLight = '#ffe4cf';
+          const skinMain = '#fedac0';
+          const skinDark = '#d8946e';
+          const skinLight = '#fff0e4';
+          const skinBlush = '#fcaaa0';
+          const lipColor = '#c85e54';
+          const lipLight = '#ea847a';
 
-          const hairColor = '#502008';
-          const hairDark = '#301004';
+          const hairColor = '#54260d';
+          const hairDark = '#321406';
+          const hairLight = '#783816';
+          const eyeBrow = '#281004';
           const shoeColor = '#602808';
           const shoeSole = '#381400';
           const buttonGold = '#ffd700';
 
           if (isSuper) {
             // ============================================
-            // --- SUPER MARIO (TALL, HIGH-FIDELITY SPRITE) ---
+            // --- SUPER HERO (TALL, DETAILED HUMAN SPRITE) ---
             // ============================================
 
-            // 1. CAP / HAT (layered visor, dome, crown crease & 'M' emblem crest)
+            // 1. CAP / VISOR (Layered adventurer cap with crest)
             ctx.fillStyle = redDark;
-            ctx.fillRect(-10, -27, 20, 11);
+            ctx.fillRect(-10, -28, 19, 10);
             ctx.fillStyle = redMain;
-            ctx.fillRect(-9, -26, 18, 9);
+            ctx.fillRect(-9, -27, 17, 8);
             ctx.fillStyle = redLight;
-            ctx.fillRect(-8, -26, 14, 3); // top cap shine
-            // Visor bill with shadow
+            ctx.fillRect(-8, -27, 13, 2); // Cap crown highlight
+            // Cap visor
             ctx.fillStyle = redMain;
-            ctx.fillRect(2, -22, 11, 4);
+            ctx.fillRect(1, -21, 10, 3);
             ctx.fillStyle = redDark;
-            ctx.fillRect(2, -18, 10, 1);
-            // White circular badge on cap front
+            ctx.fillRect(1, -18, 10, 1);
+            // Hero emblem crest
             ctx.fillStyle = '#ffffff';
-            ctx.fillRect(-3, -24, 6, 5);
+            ctx.fillRect(-2, -25, 5, 4);
             ctx.fillStyle = redDark;
-            ctx.fillRect(-2, -23, 4, 3); // 'M' insignia
+            ctx.fillRect(-1, -24, 3, 2);
 
-            // 2. HAIR & SIDEBURN
+            // 2. REALISTIC HUMAN HAIR & STYLING
+            // Back hair & nape contour
             ctx.fillStyle = hairDark;
-            ctx.fillRect(-11, -21, 6, 7);
+            ctx.fillRect(-11, -21, 6, 9);
             ctx.fillStyle = hairColor;
-            ctx.fillRect(-10, -20, 5, 5);
+            ctx.fillRect(-10, -20, 5, 7);
+            ctx.fillStyle = hairLight;
+            ctx.fillRect(-9, -19, 2, 4); // Hair shine
             ctx.fillStyle = hairDark;
-            ctx.fillRect(-12, -16, 4, 3); // back hair tuft
+            ctx.fillRect(-12, -15, 3, 4); // Nape locks
 
-            // 3. FACE & PROFILE
-            ctx.fillStyle = skinMain;
-            ctx.fillRect(-5, -21, 14, 10);
-            ctx.fillStyle = skinLight;
-            ctx.fillRect(-4, -20, 11, 4); // cheek highlight
-            ctx.fillStyle = skinDark;
-            ctx.fillRect(-5, -12, 12, 2); // chin / neck shadow
+            // Styled bangs peeking out under the cap over the forehead
+            ctx.fillStyle = hairColor;
+            ctx.fillRect(-2, -20, 4, 3);
+            ctx.fillRect(1, -19, 3, 2);
 
-            // 4. EAR
-            ctx.fillStyle = skinMain;
-            ctx.fillRect(-6, -18, 3, 4);
-            ctx.fillStyle = skinDark;
-            ctx.fillRect(-5, -17, 1, 2);
-
-            // 5. LARGE NOSE & MUSTACHE
-            // Nose (classic protruding Mario bulbous nose with highlight)
-            ctx.fillStyle = skinMain;
-            ctx.fillRect(8, -19, 6, 6);
-            ctx.fillStyle = skinLight;
-            ctx.fillRect(9, -18, 3, 3);
-            ctx.fillStyle = skinDark;
-            ctx.fillRect(9, -13, 5, 1); // nose under-shadow
-
-            // Eye & Pupil with white twinkle
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(3, -19, 4, 4);
-            ctx.fillStyle = '#002878'; // blue iris
-            ctx.fillRect(5, -19, 2, 3);
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(6, -19, 1, 3); // black pupil
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(4, -19, 1, 1); // glint
-
-            // Iconic bushy black-brown mustache
+            // Sideburn framing the human ear
             ctx.fillStyle = hairDark;
-            ctx.fillRect(2, -15, 11, 4);
-            ctx.fillRect(4, -13, 8, 3);
-            ctx.fillRect(11, -14, 3, 2); // mustache curl
+            ctx.fillRect(-7, -19, 2, 5);
 
-            // 6. SHIRT & ARMS
+            // 3. HUMAN JAW & COMPLEXION
+            ctx.fillStyle = skinMain;
+            ctx.fillRect(-5, -20, 13, 11);
+            // Forehead & cheekbone highlight
+            ctx.fillStyle = skinLight;
+            ctx.fillRect(-3, -19, 9, 3);
+            // Rosy cheek glow
+            ctx.fillStyle = skinBlush;
+            ctx.fillRect(0, -15, 4, 3);
+            // Jawline and neck contour shadow
+            ctx.fillStyle = skinDark;
+            ctx.fillRect(-4, -10, 11, 2);
+            ctx.fillRect(-2, -9, 6, 2);
+
+            // 4. HUMAN EAR (helix, lobe, inner shadow)
+            ctx.fillStyle = skinDark;
+            ctx.fillRect(-6, -18, 3, 5);
+            ctx.fillStyle = skinMain;
+            ctx.fillRect(-6, -17, 2, 3);
+            ctx.fillStyle = skinBlush;
+            ctx.fillRect(-5, -15, 1, 2);
+
+            // 5. HUMAN EYE & EYEBROW
+            // Arched dark eyebrow
+            ctx.fillStyle = eyeBrow;
+            ctx.fillRect(1, -18, 6, 2);
+            ctx.fillRect(6, -17, 2, 1);
+
+            // Almond-shaped human eye
+            ctx.fillStyle = '#ffffff'; // White sclera
+            ctx.fillRect(2, -16, 5, 3);
+            ctx.fillStyle = '#0a3d82'; // Blue-hazel iris
+            ctx.fillRect(4, -16, 2, 3);
+            ctx.fillStyle = '#050a14'; // Pupil
+            ctx.fillRect(5, -16, 1, 3);
+            ctx.fillStyle = '#ffffff'; // Specular catchlight
+            ctx.fillRect(3, -16, 1, 1);
+            // Upper lash line / lid crease
+            ctx.fillStyle = eyeBrow;
+            ctx.fillRect(1, -17, 6, 1);
+
+            // 6. PROPORTIONAL HUMAN NOSE (natural bridge & tip with nostril shadow)
+            ctx.fillStyle = skinMain;
+            ctx.fillRect(7, -16, 2, 4); // Bridge
+            ctx.fillStyle = skinLight;
+            ctx.fillRect(7, -15, 1, 2); // Bridge highlight
+            ctx.fillStyle = skinMain;
+            ctx.fillRect(8, -14, 2, 2); // Nose tip
+            ctx.fillStyle = skinDark;
+            ctx.fillRect(7, -12, 3, 1); // Nostril contour
+
+            // 7. HUMAN LIPS & CHIN (natural lips, confident smile, chin highlight)
+            ctx.fillStyle = lipColor;
+            ctx.fillRect(4, -13, 4, 1); // Upper lip
+            ctx.fillStyle = '#5c1e18';
+            ctx.fillRect(4, -12, 4, 1); // Mouth crease / smile
+            ctx.fillStyle = lipLight;
+            ctx.fillRect(4, -11, 3, 1); // Lower lip highlight
+            // Defined human chin
+            ctx.fillStyle = skinMain;
+            ctx.fillRect(4, -10, 4, 2);
+            ctx.fillStyle = skinLight;
+            ctx.fillRect(5, -10, 2, 1); // Chin highlight
+
+            // 8. SHIRT & ARMS
             ctx.fillStyle = redDark;
             ctx.fillRect(-9, -12, 18, 14);
             ctx.fillStyle = redMain;
             ctx.fillRect(-8, -11, 16, 12);
             ctx.fillStyle = redLight;
             ctx.fillRect(-7, -10, 8, 4); // chest highlight
-            // White cartoon plumber gloves
+            // White gloves
             ctx.fillStyle = '#f0f0f0';
             ctx.fillRect(-11, -5, 5, 6);
             ctx.fillRect(7, -5, 5, 6);
@@ -2475,7 +2517,7 @@
             ctx.fillRect(-11, 0, 5, 2);
             ctx.fillRect(7, 0, 5, 2);
 
-            // 7. OVERALLS & SUSPENDERS
+            // 9. OVERALLS & SUSPENDERS
             ctx.fillStyle = blueDark;
             ctx.fillRect(-7, -6, 15, 16);
             ctx.fillStyle = blueMain;
@@ -2494,7 +2536,7 @@
             ctx.fillRect(-4, -5, 1, 1);
             ctx.fillRect(4, -5, 1, 1);
 
-            // 8. LEGS & WALKING / JUMPING / SKIDDING
+            // 10. LEGS & WALKING / JUMPING / SKIDDING
             ctx.fillStyle = blueMain;
             if (!p.isGrounded) {
               // High athletic jump pose: forward knee tucked, back leg extended
@@ -2551,52 +2593,71 @@
             }
           } else {
             // ============================================
-            // --- REGULAR MARIO (SMALL, CRISP DETAIL) ---
+            // --- REGULAR HERO (SMALL, CRISP HUMAN SPRITE) ---
             // ============================================
 
             // 1. CAP & VISOR
             ctx.fillStyle = redDark;
-            ctx.fillRect(-8, -15, 16, 6);
+            ctx.fillRect(-8, -16, 15, 6);
             ctx.fillStyle = redMain;
-            ctx.fillRect(-7, -14, 14, 5);
+            ctx.fillRect(-7, -15, 13, 5);
             ctx.fillStyle = redLight;
-            ctx.fillRect(-6, -14, 10, 2); // Cap shine
-            // Visor with rim shadow
+            ctx.fillRect(-6, -15, 9, 2); // Cap shine
+            // Visor
             ctx.fillStyle = redMain;
-            ctx.fillRect(2, -12, 9, 4);
+            ctx.fillRect(1, -12, 8, 3);
             ctx.fillStyle = redDark;
-            ctx.fillRect(2, -9, 8, 1);
+            ctx.fillRect(1, -9, 8, 1);
 
-            // 2. HAIR & SIDEBURN
+            // 2. REALISTIC HUMAN HAIR & SIDEBURN
             ctx.fillStyle = hairDark;
-            ctx.fillRect(-9, -11, 5, 6);
+            ctx.fillRect(-9, -12, 5, 6);
             ctx.fillStyle = hairColor;
-            ctx.fillRect(-8, -10, 4, 4);
+            ctx.fillRect(-8, -11, 4, 4);
+            // Front bangs peeking out
+            ctx.fillStyle = hairColor;
+            ctx.fillRect(0, -12, 3, 2);
 
-            // 3. FACE & NOSE
+            // 3. HUMAN FACE & CHEEK
             ctx.fillStyle = skinMain;
-            ctx.fillRect(-4, -11, 12, 7);
+            ctx.fillRect(-4, -11, 11, 7);
             ctx.fillStyle = skinLight;
-            ctx.fillRect(-3, -10, 8, 3);
-            // Eye & glint
-            ctx.fillStyle = '#002878';
-            ctx.fillRect(2, -10, 2, 3);
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(3, -10, 1, 3);
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(2, -10, 1, 1);
-            // Round Nose with shine
-            ctx.fillStyle = skinMain;
-            ctx.fillRect(6, -10, 5, 4);
-            ctx.fillStyle = skinLight;
-            ctx.fillRect(7, -9, 2, 2);
+            ctx.fillRect(-3, -10, 6, 2); // Forehead highlight
+            ctx.fillStyle = skinBlush;
+            ctx.fillRect(0, -8, 3, 2); // Rosy cheek
             ctx.fillStyle = skinDark;
-            ctx.fillRect(7, -6, 4, 1);
+            ctx.fillRect(-3, -5, 9, 2); // Jaw shadow
 
-            // Bushy Mustache
-            ctx.fillStyle = hairDark;
-            ctx.fillRect(2, -7, 7, 3);
-            ctx.fillRect(4, -5, 5, 2);
+            // 4. HUMAN EYE & BROW
+            ctx.fillStyle = eyeBrow;
+            ctx.fillRect(1, -11, 4, 1); // Eyebrow
+            // Human Eye
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(2, -10, 4, 3);
+            ctx.fillStyle = '#0a3d82';
+            ctx.fillRect(4, -10, 2, 3);
+            ctx.fillStyle = '#050a14';
+            ctx.fillRect(5, -10, 1, 3);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(3, -10, 1, 1); // Specular glint
+
+            // 5. PROPORTIONAL HUMAN NOSE & LIPS
+            // Nose bridge & tip
+            ctx.fillStyle = skinMain;
+            ctx.fillRect(6, -9, 2, 2);
+            ctx.fillStyle = skinLight;
+            ctx.fillRect(6, -9, 1, 1);
+            ctx.fillStyle = skinDark;
+            ctx.fillRect(5, -7, 2, 1); // Nostril shadow
+
+            // Human lips & smile
+            ctx.fillStyle = lipColor;
+            ctx.fillRect(3, -7, 3, 1);
+            ctx.fillStyle = lipLight;
+            ctx.fillRect(3, -6, 3, 1);
+            // Chin
+            ctx.fillStyle = skinMain;
+            ctx.fillRect(3, -5, 3, 1);
 
             // 4. SHIRT & GLOVES
             ctx.fillStyle = redDark;
@@ -3270,9 +3331,32 @@
             ctx.font = 'bold 20px "Courier New", Courier, monospace';
             ctx.fillText(stageInfo.title, VIEW_WIDTH / 2, 222);
 
-            // Mario head and lives counter
+            // Human hero face and lives counter
+            const hfX = VIEW_WIDTH / 2 - 40;
+            const hfY = 262;
+            // Cap
             ctx.fillStyle = '#e52521';
-            ctx.fillRect(VIEW_WIDTH / 2 - 38, 264, 16, 16);
+            ctx.fillRect(hfX, hfY, 18, 7);
+            ctx.fillRect(hfX + 4, hfY + 5, 16, 3); // visor
+            // Hair & Face
+            ctx.fillStyle = '#54260d';
+            ctx.fillRect(hfX - 2, hfY + 6, 5, 10);
+            ctx.fillStyle = '#fedac0';
+            ctx.fillRect(hfX + 3, hfY + 7, 14, 11);
+            // Rosy cheek & human eye
+            ctx.fillStyle = '#fcaaa0';
+            ctx.fillRect(hfX + 6, hfY + 12, 4, 3);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(hfX + 9, hfY + 9, 4, 3);
+            ctx.fillStyle = '#0a3d82';
+            ctx.fillRect(hfX + 11, hfY + 9, 2, 3);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(hfX + 10, hfY + 9, 1, 1);
+            // Nose & Lips
+            ctx.fillStyle = '#d8946e';
+            ctx.fillRect(hfX + 14, hfY + 11, 3, 2);
+            ctx.fillStyle = '#c85e54';
+            ctx.fillRect(hfX + 10, hfY + 14, 4, 2);
             ctx.fillStyle = '#ffffff';
             ctx.font = 'bold 24px "Courier New", Courier, monospace';
             ctx.fillText(`×  ${lives}`, VIEW_WIDTH / 2 + 16, 278);
